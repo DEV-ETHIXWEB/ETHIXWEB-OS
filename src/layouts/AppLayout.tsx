@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, FolderKanban, LayoutDashboard, LogOut, Plus, Search, Settings } from "lucide-react";
@@ -49,9 +50,15 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border/60 glass-strong sticky top-0 h-screen">
+    <>
+      <div className="orb-container">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
+        <div className="orb orb-3"></div>
+      </div>
+      <div className="min-h-screen flex">
+        {/* Sidebar */}
+        <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border/60 glass-strong sticky top-0 h-screen">
         <div className="p-5">
           <NavLink to="/app"><Logo /></NavLink>
         </div>
@@ -63,15 +70,31 @@ export default function AppLayout() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all relative overflow-hidden group",
                   isActive
-                    ? "bg-gradient-subtle text-foreground shadow-card"
+                    ? "text-foreground bg-gradient-subtle shadow-card"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                 )
               }
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNav"
+                      className="absolute inset-0 bg-gradient-primary opacity-10 pointer-events-none"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0.1 }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  )}
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 h-1/2 w-1 bg-gradient-primary rounded-r-full shadow-glow" />
+                  )}
+                  <Icon className={cn("h-4 w-4 z-10 transition-transform group-hover:scale-110", isActive && "text-primary-glow")} />
+                  <span className="z-10">{label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -185,19 +208,22 @@ export default function AppLayout() {
         </header>
 
         <div className="flex-1 px-4 md:px-8 py-6 md:py-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <ErrorBoundary>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              >
+                <Outlet />
+              </motion.div>
+            </AnimatePresence>
+          </ErrorBoundary>
         </div>
       </main>
     </div>
+    </>
   );
 }

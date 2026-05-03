@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 export const API_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://localhost:4000";
+  (import.meta.env.PROD ? "" : "http://localhost:4000");
 
 export const TOKEN_KEY = "teamflow_token";
 

@@ -17,7 +17,7 @@ A premium, full-stack team collaboration platform for organizing projects, assig
 
 ## 🧰 Tech Stack
 
-**Frontend**
+**Frontend** (`src/`)
 - React 18 + Vite + TypeScript
 - Tailwind CSS (semantic design tokens) + shadcn/ui
 - React Query for data fetching & caching
@@ -26,7 +26,7 @@ A premium, full-stack team collaboration platform for organizing projects, assig
 - Recharts for analytics
 - Axios with JWT interceptors and unified error handling
 
-**Backend** (`teamflow-backend.zip`)
+**Backend** (`backend/`)
 - Node.js + Express
 - MongoDB + Mongoose
 - JWT (`jsonwebtoken`) + bcrypt
@@ -57,43 +57,57 @@ A premium, full-stack team collaboration platform for organizing projects, assig
 
 ## 🚀 Getting Started
 
-### 1. Frontend
+### 1. Backend
 
 ```bash
-# inside this repo
-cp .env.example .env.local      # set VITE_API_URL
-bun install                      # or npm install
-bun dev                          # http://localhost:8080
-```
-
-### 2. Backend
-
-Download [`teamflow-backend.zip`](./public/teamflow-backend.zip) (also exposed at `/teamflow-backend.zip` on the deployed frontend) and unzip it.
-
-```bash
-cd teamflow-backend
+cd backend
 cp .env.example .env             # set MONGODB_URI, JWT_SECRET, CLIENT_ORIGIN
 npm install
 npm run dev                      # http://localhost:4000
 ```
 
+### 2. Frontend
+
+```bash
+# inside root repo directory
+cp .env.example .env             # set VITE_API_URL=http://localhost:4000
+npm install
+npm run dev                      # http://localhost:8080
+```
+
 The backend `README.md` documents every endpoint and the full RBAC matrix.
 
-## ☁️ Deploy
+## ☁️ Deploy on Railway
 
-### Backend → Railway
+This repo is configured for a one-service Railway deploy:
 
-1. Push the `teamflow-backend` folder to a GitHub repo.
-2. New Railway project → deploy from repo.
-3. Add a MongoDB plugin (or use MongoDB Atlas) — copy the connection string into `MONGODB_URI`.
-4. Set `JWT_SECRET` to a long random string.
-5. Set `CLIENT_ORIGIN` to your deployed frontend URL (comma-separated for multiple).
-6. Railway picks up `railway.json` and runs `npm start`. Health check: `/health`.
+- Railway builds the React/Vite frontend into `dist/`.
+- Railway installs the backend dependencies.
+- Express starts with `npm start` and serves both the API and the built frontend.
+- The health check is `/health`.
 
-### Frontend → Lovable / Vercel / Netlify
+### Steps
 
-1. Set the env var `VITE_API_URL` to your Railway URL (e.g. `https://teamflow-api.up.railway.app`).
-2. Build & deploy. Lovable users: just hit **Publish**.
+1. Push this repository to GitHub.
+2. In Railway, create a new project and deploy from the GitHub repo.
+3. Use the repository root as the service root. Railway will read `railway.json`.
+4. Add a MongoDB service in Railway, or use MongoDB Atlas.
+5. Add these Railway variables:
+
+```bash
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=use_a_long_random_secret
+JWT_EXPIRES_IN=7d
+NODE_ENV=production
+```
+
+`PORT` is provided by Railway automatically. `VITE_API_URL` is not needed for this single-service deploy because the frontend calls the API on the same domain.
+
+After deploy, open your Railway public URL. You can also verify the API at:
+
+```bash
+https://your-app.up.railway.app/health
+```
 
 ## 🔒 RBAC Matrix
 
@@ -115,7 +129,7 @@ Enforced on the **backend** for every mutation; mirrored on the frontend for aff
 
 > _Replace with your published URL_
 >
-> **Frontend:** https://your-teamflow.lovable.app
+> **Frontend:** https://your-teamflow.vercel.app
 > **API:** https://teamflow-api.up.railway.app
 
 ## 📸 Screenshots
@@ -130,6 +144,8 @@ Enforced on the **backend** for every mutation; mirrored on the frontend for aff
 ## 📁 Project Structure
 
 ```
+backend/
+  src/            # Express controllers, models, routes
 src/
   api/            # Axios + per-resource API modules + normalizers
   components/     # Logo, UserAvatar, RequireAuth, shadcn/ui
@@ -138,8 +154,6 @@ src/
   layouts/        # AppLayout (sidebar + topbar + outlet)
   lib/            # api.ts (Axios instance + envelope unwrap)
   pages/          # Landing, AuthForm, Dashboard, Projects, ProjectDetail
-public/
-  teamflow-backend.zip   # Downloadable Express + Mongo backend
 ```
 
 ## 📄 License
