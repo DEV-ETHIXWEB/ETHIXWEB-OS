@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  preview: {
+    host: "0.0.0.0",
+    allowedHosts: [".up.railway.app"],
+  },
   plugins: [react()],
   resolve: {
     alias: {
