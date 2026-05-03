@@ -22,7 +22,6 @@ import { formatDistanceToNow } from "date-fns";
 import { projectsApi } from "@/api/projects";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useDerivedNotifications } from "@/hooks/useDerivedNotifications";
-import { useDebounce } from "@/hooks/useDebounce";
 
 const nav = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
