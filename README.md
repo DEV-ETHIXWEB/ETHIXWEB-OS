@@ -1,161 +1,304 @@
-# TeamFlow — Team Task Manager
+# TeamFlow - Team Task Manager
 
-A premium, full-stack team collaboration platform for organizing projects, assigning tasks, and tracking progress on a Kanban board with role-based access control.
+A premium full-stack team collaboration platform for organizing projects, assigning tasks, and tracking progress on a Kanban board with role-based access control.
 
-> Built as a portfolio-grade SaaS demo: handcrafted UI, real backend, real database, real auth.
+> Built as a portfolio-grade SaaS demo: handcrafted UI, real backend, real database, and real authentication.
 
-## ✨ Features
+## Live Demo
 
-- 🔐 **JWT authentication** — sign up, sign in, persistent sessions
-- 📁 **Projects with members** — invite teammates by email, control access
-- 👥 **Per-project RBAC** — Admin (full control) vs. Member (status-only updates)
-- 🧱 **Kanban board** — drag-and-drop with optimistic updates and instant feedback
-- 📊 **Live dashboard** — completion charts, task breakdown, recent activity
-- 🔔 **Smart notifications** — derived from overdue and assigned tasks
-- 🎨 **Premium UI** — glassmorphism, gradients, Framer Motion micro-interactions
-- ⚡ **Performance** — debounced search, request caching via React Query, optimistic mutations with rollback
+Frontend:
 
-## 🧰 Tech Stack
-
-**Frontend** (`src/`)
-- React 18 + Vite + TypeScript
-- Tailwind CSS (semantic design tokens) + shadcn/ui
-- React Query for data fetching & caching
-- @dnd-kit for the Kanban board
-- Framer Motion for animations
-- Recharts for analytics
-- Axios with JWT interceptors and unified error handling
-
-**Backend** (`backend/`)
-- Node.js + Express
-- MongoDB + Mongoose
-- JWT (`jsonwebtoken`) + bcrypt
-- Zod input validation
-- CORS allowlist + rate limiting
-- Structured error logging (morgan + custom logger)
-- Consistent response envelope: `{ success, data, message }`
-
-## 🏗️ Architecture
-
-```
-┌──────────────┐    Bearer JWT     ┌─────────────────┐
-│  React SPA   │ ────────────────▶ │  Express API     │
-│  (Vite)      │ ◀──────────────── │  /auth /projects │
-│              │  { success,data } │  /tasks /users   │
-└──────────────┘                    └────────┬────────┘
-                                             │
-                                             ▼
-                                       ┌──────────┐
-                                       │ MongoDB  │
-                                       └──────────┘
+```txt
+https://teamflow-dashboard-production-d225.up.railway.app
 ```
 
-- All API responses are wrapped in `{ success, data, message }`. The Axios interceptor unwraps `data` automatically.
-- A single `RequireAuth` route guard protects `/app/*`.
-- 401 responses globally clear the token and redirect to `/login`.
-- Project-level role is loaded once per project and gates the UI; the backend re-validates on every mutation.
+Backend API:
 
-## 🚀 Getting Started
+```txt
+https://teamflow-dashboard-production.up.railway.app
+```
 
-### 1. Backend
+Backend health check:
+
+```txt
+https://teamflow-dashboard-production.up.railway.app/health
+```
+
+## Demo Credentials
+
+Use this account to test the deployed app:
+
+```txt
+Email: akashlakhwan2329@gmail.com
+Password: AKASH@2329l
+```
+
+You can also create a new account from the signup page.
+
+## Features
+
+- JWT authentication with signup, login, and persistent sessions
+- Projects with members, invite flow, and access control
+- Project-level RBAC with Admin and Member roles
+- Kanban board with drag-and-drop task updates
+- Optimistic UI updates with rollback on failure
+- Dashboard with charts, task breakdown, and recent activity
+- Smart notifications derived from overdue and assigned tasks
+- Premium UI using Tailwind CSS, shadcn/ui, and Framer Motion
+- Axios API layer with JWT interceptors and normalized responses
+
+## Tech Stack
+
+Frontend (`src/`):
+
+- React 18
+- Vite
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- React Query
+- @dnd-kit
+- Framer Motion
+- Recharts
+- Axios
+
+Backend (`backend/`):
+
+- Node.js
+- Express
+- MongoDB
+- Mongoose
+- JWT (`jsonwebtoken`)
+- bcrypt
+- Zod validation
+- CORS
+- Express rate limiting
+- Morgan logging
+
+## Architecture
+
+```txt
+React SPA (Vite)
+    |
+    | Bearer JWT
+    v
+Express API
+    |
+    v
+MongoDB
+```
+
+API routes:
+
+```txt
+/auth
+/projects
+/tasks
+/users
+/health
+```
+
+All API responses use a consistent response shape:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "message": "Success"
+}
+```
+
+The frontend Axios layer unwraps the `data` field automatically.
+
+## Project Structure
+
+```txt
+backend/
+  src/
+    config/        # MongoDB connection
+    middleware/    # auth, validation, error handling
+    models/        # User, Project, Task
+    routes/        # auth, projects, tasks, users
+    utils/         # logger, response helpers
+    server.js      # Express app entry point
+
+src/
+  api/             # frontend API wrappers
+  components/      # shared components and shadcn/ui
+  context/         # auth context
+  hooks/           # custom React hooks
+  layouts/         # app layout
+  lib/             # Axios client and utilities
+  pages/           # landing, auth, dashboard, projects
+```
+
+## Local Development
+
+Run the backend first:
 
 ```bash
 cd backend
-cp .env.example .env             # set MONGODB_URI, JWT_SECRET, CLIENT_ORIGIN
+cp .env.example .env
 npm install
-npm run dev                      # http://localhost:4000
+npm run dev
 ```
 
-### 2. Frontend
+Backend runs on:
 
-```bash
-# inside root repo directory
-cp .env.example .env             # set VITE_API_URL=http://localhost:4000
-npm install
-npm run dev                      # http://localhost:8080
+```txt
+http://localhost:4000
 ```
 
-The backend `README.md` documents every endpoint and the full RBAC matrix.
-
-## ☁️ Deploy on Railway
-
-This repo is configured for a one-service Railway deploy:
-
-- Railway builds the React/Vite frontend into `dist/`.
-- Railway installs the backend dependencies.
-- Express starts with `npm start` and serves both the API and the built frontend.
-- The health check is `/health`.
-
-### Steps
-
-1. Push this repository to GitHub.
-2. In Railway, create a new project and deploy from the GitHub repo.
-3. Use the repository root as the service root. Railway will read `railway.json`.
-4. Add a MongoDB service in Railway, or use MongoDB Atlas.
-5. Add these Railway variables:
+In another terminal, run the frontend:
 
 ```bash
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=use_a_long_random_secret
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Frontend runs on:
+
+```txt
+http://localhost:8080
+```
+
+Root `.env` for local frontend:
+
+```txt
+VITE_API_URL=http://localhost:4000
+```
+
+Backend `.env` for local backend:
+
+```txt
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/teamflow
+JWT_SECRET=change_this_to_a_long_random_secret
 JWT_EXPIRES_IN=7d
+CLIENT_ORIGIN=http://localhost:8080
+NODE_ENV=development
+```
+
+## Railway Deployment
+
+This project is deployed on Railway as two separate services:
+
+```txt
+Frontend service: React/Vite app
+Backend service: Express/MongoDB API
+```
+
+### Frontend Service
+
+Railway settings:
+
+```txt
+Root Directory: /
+Build Command: npm run build
+Start Command: npm start
+```
+
+The root `package.json` uses:
+
+```json
+{
+  "start": "vite preview --host 0.0.0.0 --port $PORT",
+  "railway:build": "npm run build"
+}
+```
+
+Frontend Railway variables:
+
+```txt
+NODE_VERSION=22
+VITE_API_URL=https://teamflow-dashboard-production.up.railway.app
+```
+
+Do not add MongoDB variables to the frontend service.
+
+### Backend Service
+
+Railway settings:
+
+```txt
+Root Directory: /backend
+Start Command: npm start
+Healthcheck Path: /health
+```
+
+Backend Railway variables:
+
+```txt
+NODE_VERSION=22
 NODE_ENV=production
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_long_random_secret
+JWT_EXPIRES_IN=7d
+CLIENT_ORIGIN=https://teamflow-dashboard-production-d225.up.railway.app
 ```
 
-`PORT` is provided by Railway automatically. `VITE_API_URL` is not needed for this single-service deploy because the frontend calls the API on the same domain.
+Do not manually set `PORT`. Railway provides it automatically.
 
-After deploy, open your Railway public URL. You can also verify the API at:
+### Deployment Order
 
-```bash
-https://your-app.up.railway.app/health
+1. Deploy the backend service.
+2. Confirm the backend health endpoint works:
+
+```txt
+https://teamflow-dashboard-production.up.railway.app/health
 ```
 
-## 🔒 RBAC Matrix
+3. Deploy the frontend service.
+4. Set frontend `VITE_API_URL` to the backend URL.
+5. Set backend `CLIENT_ORIGIN` to the frontend URL.
+6. Redeploy backend.
+7. Redeploy frontend.
+
+## RBAC Matrix
 
 | Action | Member | Admin |
 |---|:---:|:---:|
-| View project & tasks | ✅ | ✅ |
-| Create task | ✅ | ✅ |
-| Update task **status** (drag-and-drop) | ✅ | ✅ |
-| Edit task title / description / priority / due date | ❌ | ✅ |
-| Assign task | ❌ | ✅ |
-| Delete task | ❌ | ✅ |
-| Invite / remove members | ❌ | ✅ |
-| Change member role | ❌ | ✅ |
-| Delete project | ❌ | ✅ |
+| View project and tasks | Yes | Yes |
+| Create task | Yes | Yes |
+| Update task status | Yes | Yes |
+| Edit task title, description, priority, or due date | No | Yes |
+| Assign task | No | Yes |
+| Delete task | No | Yes |
+| Invite or remove members | No | Yes |
+| Change member role | No | Yes |
+| Delete project | No | Yes |
 
-Enforced on the **backend** for every mutation; mirrored on the frontend for affordance.
+RBAC is enforced on the backend for every protected mutation and mirrored in the frontend UI.
 
-## 🌐 Live Demo
+## Useful Scripts
 
-> _Replace with your published URL_
->
-> **Frontend:** https://your-teamflow.vercel.app
-> **API:** https://teamflow-api.up.railway.app
+Frontend/root:
 
-## 📸 Screenshots
-
-> _Add screenshots here once deployed_
->
-> - Landing page
-> - Dashboard with charts
-> - Kanban board with drag-and-drop
-> - Invite & role management dialog
-
-## 📁 Project Structure
-
-```
-backend/
-  src/            # Express controllers, models, routes
-src/
-  api/            # Axios + per-resource API modules + normalizers
-  components/     # Logo, UserAvatar, RequireAuth, shadcn/ui
-  context/        # AuthContext (JWT + me + 401 handling)
-  hooks/          # useDebounce, useAllTasks, useDerivedNotifications
-  layouts/        # AppLayout (sidebar + topbar + outlet)
-  lib/            # api.ts (Axios instance + envelope unwrap)
-  pages/          # Landing, AuthForm, Dashboard, Projects, ProjectDetail
+```bash
+npm run dev
+npm run build
+npm start
+npm run lint
+npm run test
 ```
 
-## 📄 License
+Backend:
+
+```bash
+cd backend
+npm run dev
+npm start
+```
+
+## Notes
+
+- Frontend API calls use `VITE_API_URL`.
+- Backend CORS allows the deployed Railway frontend.
+- Backend requires `MONGODB_URI` before it can start.
+- `/health` is available on the backend service only.
+- Keep `.env` and `.env.local` out of GitHub.
+
+## License
 
 MIT
