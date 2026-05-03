@@ -36,7 +36,14 @@ app.use((req, res, next) => {
           return false;
         }
       })();
-      if (isSameHost || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      const isRailwayApp = (() => {
+        try {
+          return process.env.NODE_ENV === 'production' && new URL(origin).hostname.endsWith('.up.railway.app');
+        } catch {
+          return false;
+        }
+      })();
+      if (isSameHost || isRailwayApp || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
         return cb(null, true);
       }
       return cb(new Error(`CORS: origin ${origin} not allowed`));
