@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { z } = require('zod');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
@@ -23,6 +24,50 @@ router.get('/', async (req, res, next) => {
     }
     const records = await Attendance.find(filter).sort({ date: -1 }).lean();
     return ok(res, { attendance: records });
+  } catch (e) { next(e); }
+});
+
+// --- Dashboard: daily trend + attendance/leave % over the last N days ---
+router.get('/summary', async (req, res, next) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - (days - 1));
+
+    const rows = await Attendance.aggregate([
+      { $match: { organization: new mongoose.Types.ObjectId(req.organizationId), date: { $gte: since } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+          present: { $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] } },
+          absent: { $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] } },
+          leave: { $sum: { $cond: [{ $eq: ['$status', 'leave'] }, 1, 0] } },
+          holiday: { $sum: { $cond: [{ $eq: ['$status', 'holiday'] }, 1, 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const totals = rows.reduce(
+      (acc, r) => ({
+        present: acc.present + r.present,
+        absent: acc.absent + r.absent,
+        leave: acc.leave + r.leave,
+        holiday: acc.holiday + r.holiday,
+      }),
+      { present: 0, absent: 0, leave: 0, holiday: 0 }
+    );
+    const marked = totals.present + totals.absent + totals.leave;
+    const attendancePct = marked > 0 ? Math.round((totals.present / marked) * 100) : 0;
+    const leavePct = marked > 0 ? Math.round((totals.leave / marked) * 100) : 0;
+
+    return ok(res, {
+      trend: rows.map((r) => ({ date: r._id, present: r.present, absent: r.absent, leave: r.leave, holiday: r.holiday })),
+      totals,
+      attendancePct,
+      leavePct,
+    });
   } catch (e) { next(e); }
 });
 

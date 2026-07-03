@@ -127,6 +127,37 @@ router.get('/summary', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// --- Dashboard: income/expense totals per month, last N months ---
+router.get('/trend', async (req, res, next) => {
+  try {
+    const months = Math.min(24, Math.max(1, Number(req.query.months) || 12));
+    const since = new Date();
+    since.setDate(1);
+    since.setHours(0, 0, 0, 0);
+    since.setMonth(since.getMonth() - (months - 1));
+
+    const rows = await Transaction.aggregate([
+      {
+        $match: {
+          organization: new mongoose.Types.ObjectId(req.organizationId),
+          archived: { $ne: true },
+          date: { $gte: since },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m', date: '$date' } },
+          income: { $sum: { $cond: [{ $eq: ['$type', 'income'] }, '$amount', 0] } },
+          expense: { $sum: { $cond: [{ $eq: ['$type', 'expense'] }, '$amount', 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    return ok(res, { trend: rows.map((r) => ({ month: r._id, income: r.income, expense: r.expense })) });
+  } catch (e) { next(e); }
+});
+
 // --- PDF report ---
 router.get('/report/pdf', async (req, res, next) => {
   try {

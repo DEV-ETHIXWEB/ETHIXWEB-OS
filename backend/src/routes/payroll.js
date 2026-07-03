@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const PDFDocument = require('pdfkit');
 const { z } = require('zod');
 const Payslip = require('../models/Payslip');
@@ -36,6 +37,37 @@ router.get('/', async (req, res, next) => {
 
     const payslips = await Payslip.find(filter).sort({ month: -1 }).populate('employee', 'name employeeId department').lean();
     return ok(res, { payslips });
+  } catch (e) { next(e); }
+});
+
+// --- Dashboard: net pay + base salary totals per month, last N months ---
+router.get('/trend', requireCompanyRole(FINANCE_ROLES), async (req, res, next) => {
+  try {
+    const months = Math.min(24, Math.max(1, Number(req.query.months) || 12));
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setMonth(since.getMonth() - (months - 1));
+    const sinceMonth = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}`;
+
+    const rows = await Payslip.aggregate([
+      {
+        $match: {
+          organization: new mongoose.Types.ObjectId(req.organizationId),
+          archived: { $ne: true },
+          month: { $gte: sinceMonth },
+        },
+      },
+      {
+        $group: {
+          _id: '$month',
+          netPay: { $sum: '$netPay' },
+          baseSalary: { $sum: '$baseSalary' },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    return ok(res, { trend: rows.map((r) => ({ month: r._id, netPay: r.netPay, baseSalary: r.baseSalary })) });
   } catch (e) { next(e); }
 });
 

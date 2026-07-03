@@ -5,6 +5,9 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bell,
+  Briefcase,
+  Building2,
   Cake,
   CalendarDays,
   CheckCircle2,
@@ -15,12 +18,14 @@ import {
   Gift,
   Globe,
   HeartPulse,
+  Laptop,
   ListTodo,
   Loader2,
   Palmtree,
   Search,
   Server as ServerIcon,
   TrendingUp,
+  UserCheck,
   UserPlus2,
   Users,
   Wallet,
@@ -43,25 +48,38 @@ import { useAuth } from "@/context/AuthContext";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useEmployeeNotifications } from "@/hooks/useEmployeeNotifications";
+import { useDerivedNotifications } from "@/hooks/useDerivedNotifications";
+import { useRenewalNotifications } from "@/hooks/useRenewalNotifications";
+import { usePayrollNotifications } from "@/hooks/usePayrollNotifications";
 import { useCountUp } from "@/hooks/useCountUp";
 import { UserAvatar } from "@/components/UserAvatar";
 import { TiltCard } from "@/components/TiltCard";
 import { RadialProgress } from "@/components/RadialProgress";
 import { RenewalBadge } from "@/components/RenewalBadge";
-import { format, formatDistanceToNow, isAfter, isSameDay, isSameMonth, startOfMonth, startOfWeek, addDays, subDays } from "date-fns";
+import { format, formatDistanceToNow, isAfter, isSameDay, isSameMonth, startOfMonth, startOfWeek, addDays, subDays, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/api/finance";
 import { payrollApi } from "@/api/payroll";
+import { attendanceApi } from "@/api/attendance";
 import { subscriptionsApi } from "@/api/subscriptions";
 import { domainsApi } from "@/api/domains";
 import { serversApi } from "@/api/servers";
-import { FINANCE_COMPANY_ROLES, OPS_COMPANY_ROLES } from "@/types";
+import { FINANCE_COMPANY_ROLES, HR_COMPANY_ROLES, OPS_COMPANY_ROLES } from "@/types";
 
 const STATUS_COLORS: Record<string, string> = {
   todo: "hsl(var(--muted-foreground))",
   in_progress: "hsl(var(--primary))",
   done: "hsl(var(--success))",
+};
+
+const PIE_COLORS = ["hsl(358 70% 32%)", "hsl(358 82% 48%)", "hsl(38 90% 55%)", "hsl(150 60% 45%)", "hsl(358 60% 26%)", "hsl(0 0% 50%)", "hsl(358 76% 60%)", "hsl(0 0% 35%)", "hsl(358 40% 40%)"];
+
+const chartTooltipStyle = {
+  background: "hsl(var(--popover))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: 12,
+  fontSize: 12,
 };
 
 export default function Dashboard() {
@@ -72,16 +90,43 @@ export default function Dashboard() {
   const upcomingEvents = useEmployeeNotifications(employees).slice(0, 5);
 
   const headcount = employees.length;
+  const activeEmployees = employees.filter((e) => e.status === "active").length;
   const onLeaveToday = employees.filter((e) => e.status === "on_leave").length;
 
   const canFinance = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
   const canOps = !!me?.companyRole && OPS_COMPANY_ROLES.includes(me.companyRole);
+  const canHR = !!me?.companyRole && HR_COMPANY_ROLES.includes(me.companyRole);
   const currentMonth = format(new Date(), "yyyy-MM");
+  const currentYear = format(new Date(), "yyyy");
 
   const { data: financeSummary } = useQuery({
     queryKey: ["finance-summary", currentMonth],
     queryFn: () => financeApi.summary({ month: currentMonth }),
     enabled: canFinance,
+  });
+
+  const { data: yearSummary } = useQuery({
+    queryKey: ["finance-summary-year", currentYear],
+    queryFn: () => financeApi.summary({ year: currentYear }),
+    enabled: canFinance,
+  });
+
+  const { data: financeTrend = [] } = useQuery({
+    queryKey: ["finance-trend"],
+    queryFn: () => financeApi.trend(12),
+    enabled: canFinance,
+  });
+
+  const { data: payrollTrendRaw = [] } = useQuery({
+    queryKey: ["payroll-trend"],
+    queryFn: () => payrollApi.trend(12),
+    enabled: canFinance,
+  });
+
+  const { data: attendanceSummary } = useQuery({
+    queryKey: ["attendance-summary"],
+    queryFn: () => attendanceApi.summary(14),
+    enabled: canHR,
   });
 
   const { data: payslips = [] } = useQuery({
@@ -110,9 +155,18 @@ export default function Dashboard() {
 
   const payrollTotals = useMemo(() => {
     const totalPay = payslips.reduce((sum, p) => sum + p.netPay, 0);
-    const pending = payslips.filter((p) => p.paymentStatus === "pending").length;
-    return { totalPay, pending };
+    const pending = payslips.filter((p) => p.paymentStatus === "pending");
+    return { totalPay, pending: pending.length, due: pending.reduce((s, p) => s + p.netPay, 0) };
   }, [payslips]);
+
+  const monthlySalary = useMemo(() => payslips.reduce((s, p) => s + p.baseSalary, 0), [payslips]);
+  const yearlySalary = useMemo(() => payrollTrendRaw.reduce((s, r) => s + r.baseSalary, 0), [payrollTrendRaw]);
+
+  const monthlyExpensePie = useMemo(() => (financeSummary?.byCategory ?? []).map((c) => ({ name: c.category, value: c.total })), [financeSummary]);
+  const yearlyExpensePie = useMemo(() => (yearSummary?.byCategory ?? []).map((c) => ({ name: c.category, value: c.total })), [yearSummary]);
+
+  const expenseTrendChart = useMemo(() => financeTrend.map((t) => ({ month: format(new Date(`${t.month}-01`), "MMM"), expense: t.expense, income: t.income })), [financeTrend]);
+  const payrollTrendChart = useMemo(() => payrollTrendRaw.map((t) => ({ month: format(new Date(`${t.month}-01`), "MMM"), netPay: t.netPay })), [payrollTrendRaw]);
 
   const upcomingRenewals = useMemo(() => {
     const items = [
@@ -122,6 +176,50 @@ export default function Dashboard() {
     ];
     return items.filter((i) => i.date).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
   }, [subscriptions, domains, servers]);
+
+  const domainExpiryCountdown = useMemo(
+    () => [...domains].filter((d) => d.renewalDate).sort((a, b) => a.renewalDate.localeCompare(b.renewalDate)).slice(0, 5),
+    [domains]
+  );
+
+  const subscriptionCostPie = useMemo(
+    () => subscriptions.map((s) => ({ name: s.vendor, value: s.cost.amount })).filter((s) => s.value > 0),
+    [subscriptions]
+  );
+
+  const serverCostChart = useMemo(
+    () => [...servers].sort((a, b) => b.cost.amount - a.cost.amount).slice(0, 8).map((s) => ({ name: s.label.length > 12 ? s.label.slice(0, 12) + "…" : s.label, cost: s.cost.amount })),
+    [servers]
+  );
+
+  const infraCostComparison = useMemo(
+    () => [
+      { name: "Servers/mo", cost: servers.reduce((s, x) => s + x.cost.amount, 0) },
+      { name: "Subscriptions/mo", cost: subscriptions.reduce((s, x) => s + x.cost.amount, 0) },
+      { name: "Domains/yr", cost: domains.reduce((s, x) => s + x.cost.amount, 0) },
+    ],
+    [servers, subscriptions, domains]
+  );
+
+  const departmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    employees.forEach((e) => counts.set(e.department, (counts.get(e.department) ?? 0) + 1));
+    return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
+  }, [employees]);
+
+  const employeeGrowth = useMemo(() => {
+    const months = Array.from({ length: 12 }).map((_, i) => subMonths(new Date(), 11 - i));
+    return months.map((m) => {
+      const monthEnd = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+      const count = employees.filter((e) => new Date(e.joiningDate) <= monthEnd).length;
+      return { month: format(m, "MMM"), count };
+    });
+  }, [employees]);
+
+  const attendanceTrendChart = useMemo(
+    () => (attendanceSummary?.trend ?? []).map((t) => ({ date: format(new Date(t.date), "MMM d"), present: t.present, absent: t.absent, leave: t.leave })),
+    [attendanceSummary]
+  );
 
   const serverStatusCounts = useMemo(
     () => ({
@@ -161,8 +259,6 @@ export default function Dashboard() {
     { name: "In Progress", value: stats.inProgress, color: "hsl(var(--primary))" },
     { name: "To Do", value: Math.max(stats.total - stats.done - stats.inProgress, 0), color: "hsl(var(--muted-foreground))" },
   ];
-
-  const recentTasks = [...tasks].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
 
   const companyHealth = useMemo(() => {
     const completionScore = stats.total > 0 ? (stats.done / stats.total) * 100 : 100;
@@ -214,6 +310,14 @@ export default function Dashboard() {
     });
   }, [tasks, employees]);
 
+  const taskNotifications = useDerivedNotifications(tasks, projects);
+  const employeeNotifications = useEmployeeNotifications(employees);
+  const renewalNotifications = useRenewalNotifications(subscriptions, domains, servers);
+  const payrollNotifications = usePayrollNotifications(payslips);
+  const notifications = [...taskNotifications, ...employeeNotifications, ...renewalNotifications, ...payrollNotifications]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 6);
+
   const cards = [
     { label: "Total Tasks", value: stats.total, icon: ListTodo, accent: "from-primary/30 to-primary-glow/20", to: "/app/projects" },
     { label: "Completed", value: stats.done, icon: CheckCircle2, accent: "from-success/30 to-success/10", to: "/app/projects" },
@@ -221,8 +325,30 @@ export default function Dashboard() {
     { label: "Overdue", value: stats.overdue, icon: AlertTriangle, accent: "from-destructive/30 to-destructive/10", to: "/app/projects" },
   ];
 
+  const kpiCards = [
+    { label: "Total Employees", value: headcount, icon: Users, accent: "from-primary/30 to-primary-glow/20", to: "/app/employees" },
+    { label: "Active Employees", value: activeEmployees, icon: UserCheck, accent: "from-success/30 to-success/10", to: "/app/employees" },
+    { label: "Total Projects", value: projects.length, icon: Briefcase, accent: "from-accent/30 to-accent/10", to: "/app/projects" },
+    ...(canOps
+      ? [
+          { label: "Total Domains", value: domains.length, icon: Globe, accent: "from-primary/30 to-primary-glow/20", to: "/app/domains" },
+          { label: "Total Servers", value: servers.length, icon: ServerIcon, accent: "from-accent/30 to-accent/10", to: "/app/servers" },
+          { label: "Total Subscriptions", value: subscriptions.length, icon: CreditCard, accent: "from-warning/30 to-warning/10", to: "/app/subscriptions" },
+        ]
+      : []),
+    ...(canFinance ? [{ label: "Payroll Due", value: payrollTotals.due, icon: Wallet, accent: "from-destructive/30 to-destructive/10", to: "/app/payroll" }] : []),
+  ];
+
+  const financeCards = canFinance
+    ? [
+        { label: "Monthly Salary", value: monthlySalary, icon: Wallet, accent: "from-primary/30 to-primary-glow/20", to: "/app/payroll" },
+        { label: "Yearly Salary (YTD)", value: yearlySalary, icon: Wallet, accent: "from-accent/30 to-accent/10", to: "/app/payroll" },
+        { label: "Monthly Expense", value: financeSummary?.expense ?? 0, icon: DollarSign, accent: "from-destructive/30 to-destructive/10", to: "/app/finance" },
+        { label: "Yearly Expense", value: yearSummary?.expense ?? 0, icon: DollarSign, accent: "from-warning/30 to-warning/10", to: "/app/finance" },
+      ]
+    : [];
+
   const companyCards = [
-    { label: "Headcount", value: headcount, icon: Users, accent: "from-primary/30 to-primary-glow/20", to: "/app/employees" },
     { label: "On Leave Today", value: onLeaveToday, icon: Palmtree, accent: "from-warning/30 to-warning/10", to: "/app/employees" },
   ];
 
@@ -272,7 +398,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiCards.map((c, i) => (
+          <StatCard key={c.label} {...c} delay={i * 0.04} />
+        ))}
+      </div>
+
+      {/* Finance KPI cards */}
+      {financeCards.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {financeCards.map((c, i) => (
+            <StatCard key={c.label} {...c} delay={i * 0.04} prefix="$" />
+          ))}
+        </div>
+      )}
+
+      {/* Task cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c, i) => (
           <StatCard key={c.label} {...c} delay={i * 0.05} />
@@ -296,6 +438,25 @@ export default function Dashboard() {
         {companyCards.map((c, i) => (
           <StatCard key={c.label} {...c} delay={0.2 + i * 0.05} />
         ))}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass rounded-2xl p-6">
+          <div className="font-semibold inline-flex items-center gap-2 mb-2"><Bell className="h-4 w-4 text-accent" /> Notifications</div>
+          {notifications.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">You're all caught up.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  onClick={() => n.href && navigate(n.href)}
+                  className="flex items-start gap-2 text-sm py-1 hover:translate-x-1 transition-transform cursor-pointer"
+                >
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  <span className="truncate">{n.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* Upcoming events + mini calendar */}
@@ -370,7 +531,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* Charts */}
+          {/* Task charts */}
           <div className="grid lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 glass rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
@@ -385,14 +546,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 12,
-                        fontSize: 12,
-                      }}
-                    />
+                    <Tooltip contentStyle={chartTooltipStyle} />
                     <Bar dataKey="done" stackId="a" fill={STATUS_COLORS.done} radius={[0, 0, 0, 0]} />
                     <Bar dataKey="inProgress" stackId="a" fill={STATUS_COLORS.in_progress} />
                     <Bar dataKey="todo" stackId="a" fill={STATUS_COLORS.todo} radius={[6, 6, 0, 0]} />
@@ -410,14 +564,7 @@ export default function Dashboard() {
                     <Pie data={pieData} dataKey="value" innerRadius={50} outerRadius={80} paddingAngle={3}>
                       {pieData.map((d) => <Cell key={d.name} fill={d.color} />)}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 12,
-                        fontSize: 12,
-                      }}
-                    />
+                    <Tooltip contentStyle={chartTooltipStyle} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -451,14 +598,7 @@ export default function Dashboard() {
                   </defs>
                   <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={10} interval={2} />
                   <YAxis hide allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 12,
-                      fontSize: 12,
-                    }}
-                  />
+                  <Tooltip contentStyle={chartTooltipStyle} />
                   <Area type="monotone" dataKey="created" stroke="hsl(var(--primary-glow))" strokeWidth={2} fill="url(#momentumFill)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -548,96 +688,315 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Operations: finance, payroll, renewals, infra */}
-      {(canFinance || canOps) && (
+      {/* Finance & Payroll analytics */}
+      {canFinance && (
         <div className="space-y-4">
-          <div className="text-sm uppercase tracking-widest text-muted-foreground">Operations</div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {canFinance && (
-              <Link to="/app/finance" className="block">
-                <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
-                      <DollarSign className="h-4 w-4 text-primary-glow" />
-                    </div>
-                    <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
-                  </div>
-                  <div className="font-semibold">Finance</div>
-                  {financeSummary ? (
-                    <div className="mt-2 space-y-1 text-sm">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Income</span><span className="text-success font-medium">+{financeSummary.income.toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Expense</span><span className="text-destructive font-medium">-{financeSummary.expense.toLocaleString()}</span></div>
-                      <div className="flex justify-between pt-1 border-t border-border/60"><span className="text-muted-foreground">Profit</span><span className="font-semibold">{financeSummary.profit.toLocaleString()}</span></div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground mt-1">This month's cash flow</div>
-                  )}
-                </TiltCard>
-              </Link>
-            )}
+          <div className="text-sm uppercase tracking-widest text-muted-foreground">Finance & Payroll</div>
 
-            {canFinance && (
-              <Link to="/app/payroll" className="block">
-                <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
-                      <Wallet className="h-4 w-4 text-primary-glow" />
-                    </div>
-                    <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
-                  </div>
-                  <div className="font-semibold">Payroll</div>
-                  <div className="mt-2 text-2xl font-bold">{payrollTotals.totalPay.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {payslips.length} payslip{payslips.length === 1 ? "" : "s"} &middot; {payrollTotals.pending} pending
-                  </div>
-                </TiltCard>
-              </Link>
-            )}
-
-            {canOps && (
-              <div className="glass rounded-2xl p-6 sm:col-span-2 lg:col-span-1">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="font-semibold inline-flex items-center gap-2"><Globe className="h-4 w-4 text-accent" /> Renewing soon</div>
-                </div>
-                {upcomingRenewals.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-4 text-center">Nothing renewing soon.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {upcomingRenewals.map((r) => (
-                      <Link key={r.id} to={r.href} className="flex items-center justify-between gap-2 py-1.5 hover:translate-x-1 transition-transform">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{r.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{r.sub}</div>
-                        </div>
-                        <RenewalBadge date={r.date} className="shrink-0" />
-                      </Link>
-                    ))}
-                  </div>
-                )}
+          <div className="grid lg:grid-cols-2 gap-4">
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Monthly expense trend</div>
+              <div className="text-xs text-muted-foreground">Last 12 months</div>
+              <div className="h-64 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expenseTrendChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="expense" fill="hsl(358 76% 48%)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            )}
+            </div>
 
-            {canOps && (
-              <Link to="/app/servers" className="block">
-                <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
-                      <ServerIcon className="h-4 w-4 text-primary-glow" />
-                    </div>
-                    <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Income vs expense</div>
+              <div className="text-xs text-muted-foreground">Last 12 months</div>
+              <div className="h-64 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expenseTrendChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="income" fill="hsl(150 60% 45%)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="expense" fill="hsl(358 76% 48%)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-4">
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Monthly expense breakdown</div>
+              <div className="text-xs text-muted-foreground">{format(new Date(), "MMMM yyyy")}</div>
+              <div className="h-52 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={monthlyExpensePie} dataKey="value" innerRadius={40} outerRadius={70} paddingAngle={3}>
+                      {monthlyExpensePie.map((d, i) => <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {monthlyExpensePie.length === 0 && <div className="text-xs text-muted-foreground text-center">No expenses yet.</div>}
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Yearly expense breakdown</div>
+              <div className="text-xs text-muted-foreground">{currentYear}</div>
+              <div className="h-52 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={yearlyExpensePie} dataKey="value" innerRadius={40} outerRadius={70} paddingAngle={3}>
+                      {yearlyExpensePie.map((d, i) => <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {yearlyExpensePie.length === 0 && <div className="text-xs text-muted-foreground text-center">No expenses yet.</div>}
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Payroll trend</div>
+              <div className="text-xs text-muted-foreground">Net pay, last 12 months</div>
+              <div className="h-52 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={payrollTrendChart}>
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                    <YAxis hide />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="netPay" fill="hsl(var(--primary-glow))" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Infrastructure & subscriptions */}
+      {canOps && (
+        <div className="space-y-4">
+          <div className="text-sm uppercase tracking-widest text-muted-foreground">Infrastructure & Subscriptions</div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link to="/app/finance" className="block">
+              <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
+                    <DollarSign className="h-4 w-4 text-primary-glow" />
                   </div>
-                  <div className="font-semibold">Servers</div>
-                  <div className="mt-2 flex items-center gap-3 text-sm">
-                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{serverStatusCounts.online} online</span>
+                  <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
+                </div>
+                <div className="font-semibold">Finance</div>
+                {financeSummary ? (
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Income</span><span className="text-success font-medium">+{financeSummary.income.toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Expense</span><span className="text-destructive font-medium">-{financeSummary.expense.toLocaleString()}</span></div>
+                    <div className="flex justify-between pt-1 border-t border-border/60"><span className="text-muted-foreground">Profit</span><span className="font-semibold">{financeSummary.profit.toLocaleString()}</span></div>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{serverStatusCounts.degraded} degraded</span>
-                    <span>{serverStatusCounts.offline} offline</span>
+                ) : (
+                  <div className="text-sm text-muted-foreground mt-1">This month's cash flow</div>
+                )}
+              </TiltCard>
+            </Link>
+
+            <Link to="/app/payroll" className="block">
+              <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
+                    <Wallet className="h-4 w-4 text-primary-glow" />
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2">{servers.length} server{servers.length === 1 ? "" : "s"} total</div>
-                </TiltCard>
-              </Link>
-            )}
+                  <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
+                </div>
+                <div className="font-semibold">Payroll</div>
+                <div className="mt-2 text-2xl font-bold">{payrollTotals.totalPay.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {payslips.length} payslip{payslips.length === 1 ? "" : "s"} &middot; {payrollTotals.pending} pending
+                </div>
+              </TiltCard>
+            </Link>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-semibold inline-flex items-center gap-2"><Globe className="h-4 w-4 text-accent" /> Renewing soon</div>
+              </div>
+              {upcomingRenewals.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-4 text-center">Nothing renewing soon.</div>
+              ) : (
+                <div className="space-y-2">
+                  {upcomingRenewals.map((r) => (
+                    <Link key={r.id} to={r.href} className="flex items-center justify-between gap-2 py-1.5 hover:translate-x-1 transition-transform">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{r.title}</div>
+                        <div className="text-xs text-muted-foreground truncate">{r.sub}</div>
+                      </div>
+                      <RenewalBadge date={r.date} className="shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Link to="/app/servers" className="block">
+              <TiltCard strength={4} className="glass glass-sheen rounded-2xl p-6 h-full hover:-translate-y-0.5 hover:shadow-glow transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-primary/20 grid place-items-center">
+                    <ServerIcon className="h-4 w-4 text-primary-glow" />
+                  </div>
+                  <span className="text-[0.65rem] uppercase tracking-wider px-2 py-1 rounded-full bg-success/15 text-success">Live</span>
+                </div>
+                <div className="font-semibold">Servers</div>
+                <div className="mt-2 flex items-center gap-3 text-sm">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{serverStatusCounts.online} online</span>
+                </div>
+                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>{serverStatusCounts.degraded} degraded</span>
+                  <span>{serverStatusCounts.offline} offline</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-2">{servers.length} server{servers.length === 1 ? "" : "s"} total</div>
+              </TiltCard>
+            </Link>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-4">
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Subscription cost breakdown</div>
+              <div className="text-xs text-muted-foreground">By vendor</div>
+              <div className="h-52 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={subscriptionCostPie} dataKey="value" innerRadius={40} outerRadius={70} paddingAngle={3}>
+                      {subscriptionCostPie.map((d, i) => <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {subscriptionCostPie.length === 0 && <div className="text-xs text-muted-foreground text-center">No subscriptions yet.</div>}
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold">Server cost</div>
+              <div className="text-xs text-muted-foreground">Top servers by monthly cost</div>
+              <div className="h-52 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={serverCostChart} layout="vertical">
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} width={80} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="cost" fill="hsl(var(--primary-glow))" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {serverCostChart.length === 0 && <div className="text-xs text-muted-foreground text-center">No servers yet.</div>}
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold inline-flex items-center gap-2"><Laptop className="h-4 w-4 text-accent" /> Domain expiry countdown</div>
+              {domainExpiryCountdown.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-6 text-center">No domains yet.</div>
+              ) : (
+                <div className="space-y-2 mt-3">
+                  {domainExpiryCountdown.map((d) => (
+                    <Link key={d.id} to="/app/domains" className="flex items-center justify-between gap-2 py-1 hover:translate-x-1 transition-transform">
+                      <div className="text-sm font-medium truncate">{d.domainName}</div>
+                      <RenewalBadge date={d.renewalDate} className="shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="glass rounded-2xl p-6">
+            <div className="font-semibold">Infrastructure cost comparison</div>
+            <div className="text-xs text-muted-foreground">Servers & subscriptions monthly, domains yearly</div>
+            <div className="h-48 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={infraCostComparison}>
+                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="cost" fill="hsl(var(--primary-glow))" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* People & HR analytics */}
+      {canHR && (
+        <div className="space-y-4">
+          <div className="text-sm uppercase tracking-widest text-muted-foreground">People & HR</div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <StatCard label="Attendance %" value={attendanceSummary?.attendancePct ?? 0} icon={UserCheck} accent="from-success/30 to-success/10" suffix="%" />
+            <StatCard label="Leave %" value={attendanceSummary?.leavePct ?? 0} icon={Palmtree} accent="from-warning/30 to-warning/10" suffix="%" />
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 glass rounded-2xl p-6">
+              <div className="font-semibold inline-flex items-center gap-2"><UserPlus2 className="h-4 w-4 text-primary-glow" /> Employee growth</div>
+              <div className="text-xs text-muted-foreground">Headcount over the last 12 months</div>
+              <div className="h-56 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={employeeGrowth}>
+                    <defs>
+                      <linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary-glow))" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="hsl(var(--primary-glow))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary-glow))" strokeWidth={2} fill="url(#growthFill)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <div className="font-semibold inline-flex items-center gap-2"><Building2 className="h-4 w-4 text-accent" /> By department</div>
+              <div className="h-56 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={departmentCounts} layout="vertical">
+                    <XAxis type="number" hide allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} width={80} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="value" fill="hsl(var(--primary-glow))" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass rounded-2xl p-6">
+            <div className="font-semibold">Attendance trend</div>
+            <div className="text-xs text-muted-foreground">Last 14 days</div>
+            <div className="h-48 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={attendanceTrendChart}>
+                  <defs>
+                    <linearGradient id="presentFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(150 60% 45%)" stopOpacity={0.4} /><stop offset="100%" stopColor="hsl(150 60% 45%)" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="leaveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(38 90% 55%)" stopOpacity={0.4} /><stop offset="100%" stopColor="hsl(38 90% 55%)" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Area type="monotone" dataKey="present" stroke="hsl(150 60% 45%)" fill="url(#presentFill)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="leave" stroke="hsl(38 90% 55%)" fill="url(#leaveFill)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+              {attendanceTrendChart.length === 0 && <div className="text-xs text-muted-foreground text-center mt-2">No attendance marked yet.</div>}
+            </div>
           </div>
         </div>
       )}
@@ -652,9 +1011,11 @@ interface StatCardProps {
   accent: string;
   delay?: number;
   to?: string;
+  prefix?: string;
+  suffix?: string;
 }
 
-function StatCard({ label, value, icon: Icon, accent, delay = 0, to }: StatCardProps) {
+function StatCard({ label, value, icon: Icon, accent, delay = 0, to, prefix, suffix }: StatCardProps) {
   const animated = useCountUp(value);
   const content = (
     <TiltCard strength={5} className="glass glass-sheen rounded-2xl p-6 overflow-hidden hover:-translate-y-0.5 hover:shadow-glow transition-all">
@@ -662,7 +1023,7 @@ function StatCard({ label, value, icon: Icon, accent, delay = 0, to }: StatCardP
       <div className="relative flex items-start justify-between">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="text-3xl font-bold mt-2">{animated}</div>
+          <div className="text-3xl font-bold mt-2">{prefix}{animated.toLocaleString()}{suffix}</div>
         </div>
         <motion.div
           className="h-10 w-10 rounded-xl bg-secondary/60 grid place-items-center"

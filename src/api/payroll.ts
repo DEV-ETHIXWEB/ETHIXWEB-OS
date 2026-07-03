@@ -28,6 +28,10 @@ export const payrollApi = {
     const { data } = await api.post(`/payroll/${id}/mark-paid`);
     return normPayslip(data.payslip);
   },
+  async trend(months = 12): Promise<{ month: string; netPay: number; baseSalary: number }[]> {
+    const { data } = await api.get("/payroll/trend", { params: { months } });
+    return data.trend ?? [];
+  },
   async downloadPdf(id: string, filename: string): Promise<void> {
     const res = await api.get(`/payroll/${id}/pdf`, { responseType: "blob" });
     const blob = new Blob([res.data as BlobPart], { type: "application/pdf" });

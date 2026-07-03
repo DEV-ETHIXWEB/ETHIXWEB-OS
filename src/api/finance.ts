@@ -34,6 +34,10 @@ export const financeApi = {
     const { data } = await api.get("/finance/summary", { params });
     return data as FinanceSummary;
   },
+  async trend(months = 12): Promise<{ month: string; income: number; expense: number }[]> {
+    const { data } = await api.get("/finance/trend", { params: { months } });
+    return data.trend ?? [];
+  },
   async downloadReportPdf(params: { month?: string; year?: string }, filename: string): Promise<void> {
     const res = await api.get("/finance/report/pdf", { params, responseType: "blob" });
     const blob = new Blob([res.data as BlobPart], { type: "application/pdf" });
