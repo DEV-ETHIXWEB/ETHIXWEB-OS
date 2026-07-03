@@ -1,0 +1,34 @@
+{
+  "services": {
+    "web": {
+      "root": "."
+    },
+    "api": {
+      "root": "backend",
+      "framework": "express",
+      "entrypoint": "src/server.js"
+    }
+  },
+  "rewrites": [
+    { "source": "/health(.*)", "destination": { "service": "api" } },
+    { "source": "/auth(.*)", "destination": { "service": "api" } },
+    { "source": "/invites(.*)", "destination": { "service": "api" } },
+    { "source": "/projects(.*)", "destination": { "service": "api" } },
+    { "source": "/tasks(.*)", "destination": { "service": "api" } },
+    { "source": "/users(.*)", "destination": { "service": "api" } },
+    { "source": "/employees(.*)", "destination": { "service": "api" } },
+    { "source": "/attendance(.*)", "destination": { "service": "api" } },
+    { "source": "/leaves(.*)", "destination": { "service": "api" } },
+    { "source": "/payroll(.*)", "destination": { "service": "api" } },
+    { "source": "/subscriptions(.*)", "destination": { "service": "api" } },
+    { "source": "/domains(.*)", "destination": { "service": "api" } },
+    { "source": "/servers(.*)", "destination": { "service": "api" } },
+    { "source": "/finance(.*)", "destination": { "service": "api" } },
+    { "source": "/assets(.*)", "destination": { "service": "api" } },
+    { "source": "/clients(.*)", "destination": { "service": "api" } },
+    { "source": "/vendors(.*)", "destination": { "service": "api" } },
+    { "source": "/departments(.*)", "destination": { "service": "api" } },
+    { "source": "/teams(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

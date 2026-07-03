@@ -3,7 +3,7 @@ const { z } = require('zod');
 const Subscription = require('../models/Subscription');
 const { requireAuth, requireCompanyRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { uploadDocument, publicUrlFor } = require('../middleware/upload');
+const { uploadDocument, uploadToBlob } = require('../middleware/upload');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
 
@@ -83,7 +83,7 @@ router.post('/:id/invoice', requireCompanyRole(MANAGE_ROLES), uploadDocument.sin
     const subscription = await Subscription.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!subscription) throw new ApiError('Subscription not found', 404);
     if (!req.file) throw new ApiError('invoice file is required', 400);
-    subscription.invoiceUrl = publicUrlFor(req, req.file.path);
+    subscription.invoiceUrl = await uploadToBlob(req, req.file, 'invoices');
     await subscription.save();
     return ok(res, { subscription }, 'Invoice uploaded');
   } catch (e) { next(e); }

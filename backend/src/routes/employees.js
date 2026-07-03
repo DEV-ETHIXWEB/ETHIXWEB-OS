@@ -4,7 +4,7 @@ const Employee = require('../models/Employee');
 const Organization = require('../models/Organization');
 const { requireAuth, requireCompanyRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { uploadPhoto, uploadDocument, publicUrlFor } = require('../middleware/upload');
+const { uploadPhoto, uploadDocument, uploadToBlob } = require('../middleware/upload');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
 
@@ -116,7 +116,7 @@ router.post('/:id/photo', requireCompanyRole(HR_ROLES), uploadPhoto.single('phot
     const employee = await Employee.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!employee) throw new ApiError('Employee not found', 404);
     if (!req.file) throw new ApiError('photo file is required', 400);
-    employee.photoUrl = publicUrlFor(req, req.file.path);
+    employee.photoUrl = await uploadToBlob(req, req.file, 'photos');
     await employee.save();
     return ok(res, { employee }, 'Photo updated');
   } catch (e) { next(e); }
@@ -128,7 +128,8 @@ router.post('/:id/documents', requireCompanyRole(HR_ROLES), uploadDocument.singl
     if (!employee) throw new ApiError('Employee not found', 404);
     if (!req.file) throw new ApiError('document file is required', 400);
     const type = req.body.type || 'Document';
-    employee.documents.push({ type, url: publicUrlFor(req, req.file.path), uploadedAt: new Date() });
+    const url = await uploadToBlob(req, req.file, 'documents');
+    employee.documents.push({ type, url, uploadedAt: new Date() });
     await employee.save();
     return ok(res, { employee }, 'Document uploaded');
   } catch (e) { next(e); }

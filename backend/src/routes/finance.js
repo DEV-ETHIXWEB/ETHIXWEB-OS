@@ -5,7 +5,7 @@ const { z } = require('zod');
 const Transaction = require('../models/Transaction');
 const { requireAuth, requireCompanyRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { uploadDocument, publicUrlFor } = require('../middleware/upload');
+const { uploadDocument, uploadToBlob } = require('../middleware/upload');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
 
@@ -74,7 +74,7 @@ router.post('/:id/attachment', uploadDocument.single('attachment'), async (req, 
     const transaction = await Transaction.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!transaction) throw new ApiError('Transaction not found', 404);
     if (!req.file) throw new ApiError('attachment file is required', 400);
-    transaction.attachmentUrl = publicUrlFor(req, req.file.path);
+    transaction.attachmentUrl = await uploadToBlob(req, req.file, 'attachments');
     await transaction.save();
     return ok(res, { transaction }, 'Attachment uploaded');
   } catch (e) { next(e); }

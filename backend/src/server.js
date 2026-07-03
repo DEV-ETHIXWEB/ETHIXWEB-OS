@@ -28,7 +28,6 @@ const clientRoutes = require('./routes/clients');
 const vendorRoutes = require('./routes/vendors');
 const departmentRoutes = require('./routes/departments');
 const teamRoutes = require('./routes/teams');
-const { UPLOAD_ROOT } = require('./middleware/upload');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -70,6 +69,15 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+// On serverless hosts (Vercel), a fresh function invocation may not have a
+// live Mongo connection yet; connectDB() is cached, so this is a no-op once
+// warm. On persistent-process hosts (Railway/Render/Fly/local dev) the
+// connection is already established below before the process ever starts
+// listening, so this resolves instantly.
+app.use((req, res, next) => {
+  connectDB(process.env.MONGODB_URI).then(() => next(), next);
+});
+
 // Basic rate limit on auth to prevent brute-force
 app.use(
   '/auth',
@@ -92,8 +100,6 @@ app.get('/health', (_req, res) =>
     message: 'TeamFlow API is running',
   })
 );
-
-app.use('/uploads', express.static(UPLOAD_ROOT));
 
 app.use('/auth', authRoutes);
 app.use('/invites', inviteRoutes);
@@ -128,11 +134,20 @@ if (process.env.NODE_ENV === 'production') {
 app.use(notFound);
 app.use(errorHandler);
 
-connectDB(process.env.MONGODB_URI)
-  .then(() => {
-    app.listen(PORT, () => logger.info(`TeamFlow API listening on :${PORT}`));
-  })
-  .catch((err) => {
-    logger.error('Failed to start server', err);
-    process.exit(1);
-  });
+// Only bind a persistent listener when this file is executed directly
+// (Railway/Render/Fly/local `node src/server.js`). When Vercel's builder
+// requires this file as a module for its Express service, `require.main !==
+// module`, so we skip .listen() and just export the app as a request handler
+// — the connectDB middleware above ensures the DB is ready per-request.
+if (require.main === module) {
+  connectDB(process.env.MONGODB_URI)
+    .then(() => {
+      app.listen(PORT, () => logger.info(`TeamFlow API listening on :${PORT}`));
+    })
+    .catch((err) => {
+      logger.error('Failed to start server', err);
+      process.exit(1);
+    });
+}
+
+module.exports = app;
