@@ -2,14 +2,12 @@ const express = require('express');
 const { z } = require('zod');
 const LeaveRequest = require('../models/LeaveRequest');
 const Employee = require('../models/Employee');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const HR_ROLES = ['superadmin', 'owner', 'hr', 'manager'];
 
 const listQuerySchema = z.object({
   employee: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
@@ -20,7 +18,13 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
   try {
     const { employee, status } = req.query;
     const filter = { organization: req.organizationId };
-    if (employee) filter.employee = employee;
+    if (req.user.permissions.includes('leaves.approve')) {
+      if (employee) filter.employee = employee;
+    } else {
+      const myEmployee = await Employee.findOne({ user: req.user.id, organization: req.organizationId }).select('_id').lean();
+      if (!myEmployee) return ok(res, { leaves: [] });
+      filter.employee = myEmployee._id;
+    }
     if (status) filter.status = status;
     const leaves = await LeaveRequest.find(filter).sort({ createdAt: -1 }).lean();
     return ok(res, { leaves });
@@ -41,8 +45,8 @@ router.post('/', validate(createSchema), async (req, res, next) => {
     if (!employee) throw new ApiError('Employee not found', 404);
 
     const isSelf = employee.user && String(employee.user) === req.user.id;
-    const isHR = HR_ROLES.includes(req.user.companyRole);
-    if (!isSelf && !isHR) throw new ApiError('You can only request leave for yourself', 403);
+    const canRequestForOthers = req.user.permissions.includes('leaves.approve');
+    if (!isSelf && !canRequestForOthers) throw new ApiError('You can only request leave for yourself', 403);
 
     const leave = await LeaveRequest.create({ ...req.body, organization: req.organizationId });
     return ok(res, { leave }, 'Leave requested', 201);
@@ -51,7 +55,7 @@ router.post('/', validate(createSchema), async (req, res, next) => {
 
 const reviewSchema = z.object({ status: z.enum(['approved', 'rejected']) });
 
-router.patch('/:id', requireCompanyRole(HR_ROLES), validate(reviewSchema), async (req, res, next) => {
+router.patch('/:id', requirePermission('leaves.approve'), validate(reviewSchema), async (req, res, next) => {
   try {
     const leave = await LeaveRequest.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!leave) throw new ApiError('Leave request not found', 404);

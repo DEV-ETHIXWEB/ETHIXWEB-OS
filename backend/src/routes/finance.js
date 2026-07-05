@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const PDFDocument = require('pdfkit');
 const { z } = require('zod');
 const Transaction = require('../models/Transaction');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { uploadDocument, uploadToBlob } = require('../middleware/upload');
 const { ok, ApiError } = require('../utils/respond');
@@ -14,9 +14,7 @@ const { writeLimiter, uploadLimiter, exportLimiter } = require('../middleware/ra
 const router = express.Router();
 router.use(requireAuth);
 
-const FINANCE_ROLES = ['superadmin', 'owner', 'finance'];
-
-router.use(requireCompanyRole(FINANCE_ROLES));
+router.use(requirePermission('finance.view'));
 
 const listQuerySchema = z.object({
   type: z.enum(['income', 'expense']).optional(),
@@ -52,14 +50,14 @@ const bodySchema = z.object({
   recurring: z.boolean().optional().default(false),
 });
 
-router.post('/', writeLimiter, validate(bodySchema), async (req, res, next) => {
+router.post('/', writeLimiter, requirePermission('finance.manage'), validate(bodySchema), async (req, res, next) => {
   try {
     const transaction = await Transaction.create({ ...req.body, organization: req.organizationId, createdBy: req.user.id });
     return ok(res, { transaction }, 'Transaction recorded', 201);
   } catch (e) { next(e); }
 });
 
-router.patch('/:id', writeLimiter, validate(bodySchema.partial()), async (req, res, next) => {
+router.patch('/:id', writeLimiter, requirePermission('finance.manage'), validate(bodySchema.partial()), async (req, res, next) => {
   try {
     const transaction = await Transaction.findOneAndUpdate(
       { _id: req.params.id, organization: req.organizationId },
@@ -71,7 +69,7 @@ router.patch('/:id', writeLimiter, validate(bodySchema.partial()), async (req, r
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePermission('finance.manage'), async (req, res, next) => {
   try {
     const transaction = await Transaction.findOneAndDelete({ _id: req.params.id, organization: req.organizationId });
     if (!transaction) throw new ApiError('Transaction not found', 404);
@@ -80,7 +78,7 @@ router.delete('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:id/attachment', uploadLimiter, uploadDocument.single('attachment'), async (req, res, next) => {
+router.post('/:id/attachment', uploadLimiter, requirePermission('finance.manage'), uploadDocument.single('attachment'), async (req, res, next) => {
   try {
     const transaction = await Transaction.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!transaction) throw new ApiError('Transaction not found', 404);
@@ -177,7 +175,7 @@ router.get('/trend', validate(trendQuerySchema, 'query'), async (req, res, next)
 });
 
 // --- PDF report ---
-router.get('/report/pdf', exportLimiter, validate(summaryQuerySchema, 'query'), async (req, res, next) => {
+router.get('/report/pdf', exportLimiter, requirePermission('finance.export'), validate(summaryQuerySchema, 'query'), async (req, res, next) => {
   try {
     const { month, year } = req.query;
     const filter = { organization: req.organizationId, archived: { $ne: true } };
@@ -219,8 +217,7 @@ router.get('/report/pdf', exportLimiter, validate(summaryQuerySchema, 'query'), 
 
 mountCrudExtensions(router, {
   Model: Transaction,
-  requireCompanyRole,
-  manageRoles: FINANCE_ROLES,
+  manageMiddleware: requirePermission('finance.manage'),
   patchSchema: bodySchema.partial(),
   resourceName: 'Transaction',
   beforeDuplicate: async (obj) => {

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Archive, ArchiveRestore, Briefcase, Copy, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientsApi, type ClientInput } from "@/api/clients";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { OPS_COMPANY_ROLES, type Client, type ClientStatus } from "@/types";
+import type { Client, ClientStatus } from "@/types";
 
 const STATUSES: ClientStatus[] = ["active", "inactive", "prospect"];
 const STATUS_STYLE: Record<ClientStatus, string> = {
@@ -42,8 +42,7 @@ function toEditForm(c: Client): ClientInput {
 }
 
 export default function Clients() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && OPS_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('clients.manage');
   const qc = useQueryClient();
   const { run: runUndoable } = useUndoableAction();
   const [open, setOpen] = useState(false);

@@ -3,14 +3,12 @@ const mongoose = require('mongoose');
 const { z } = require('zod');
 const Attendance = require('../models/Attendance');
 const Employee = require('../models/Employee');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const HR_ROLES = ['superadmin', 'owner', 'hr', 'manager'];
 
 const listQuerySchema = z.object({
   employee: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
@@ -22,7 +20,13 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
   try {
     const { employee, from, to } = req.query;
     const filter = { organization: req.organizationId };
-    if (employee) filter.employee = employee;
+    if (req.user.permissions.includes('attendance.view_all')) {
+      if (employee) filter.employee = employee;
+    } else {
+      const myEmployee = await Employee.findOne({ user: req.user.id, organization: req.organizationId }).select('_id').lean();
+      if (!myEmployee) return ok(res, { attendance: [] });
+      filter.employee = myEmployee._id;
+    }
     if (from || to) {
       filter.date = {};
       if (from) filter.date.$gte = new Date(from);
@@ -92,8 +96,8 @@ router.post('/', validate(markSchema), async (req, res, next) => {
     if (!employee) throw new ApiError('Employee not found', 404);
 
     const isSelf = employee.user && String(employee.user) === req.user.id;
-    const isHR = HR_ROLES.includes(req.user.companyRole);
-    if (!isSelf && !isHR) throw new ApiError('You can only mark your own attendance', 403);
+    const canMarkAny = req.user.permissions.includes('attendance.mark_any');
+    if (!isSelf && !canMarkAny) throw new ApiError('You can only mark your own attendance', 403);
 
     const day = new Date(date);
     day.setHours(0, 0, 0, 0);

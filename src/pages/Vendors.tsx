@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Archive, ArchiveRestore, Copy, Loader2, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { vendorsApi, type VendorInput } from "@/api/vendors";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { OPS_COMPANY_ROLES, type Vendor, type VendorStatus } from "@/types";
+import type { Vendor, VendorStatus } from "@/types";
 
 const STATUSES: VendorStatus[] = ["active", "inactive"];
 const STATUS_STYLE: Record<VendorStatus, string> = {
@@ -42,8 +42,7 @@ function toEditForm(v: Vendor): VendorInput {
 }
 
 export default function Vendors() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && OPS_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('vendors.manage');
   const qc = useQueryClient();
   const { run: runUndoable } = useUndoableAction();
   const [open, setOpen] = useState(false);

@@ -68,7 +68,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useRecentlyVisited } from "@/hooks/useRecentlyVisited";
 import { usePinnedProjects } from "@/hooks/usePinnedProjects";
 import { useLiveClock } from "@/hooks/useLiveClock";
-import { ASSET_COMPANY_ROLES, FINANCE_COMPANY_ROLES, OPS_COMPANY_ROLES, OWNER_COMPANY_ROLES } from "@/types";
 
 const baseNav = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -94,6 +93,8 @@ const assetsNav = [{ to: "/app/assets", label: "Assets", icon: Laptop }];
 
 const ownerNav = [{ to: "/app/team", label: "Team", icon: UserPlus }];
 
+const adminNav = [{ to: "/app/admin/roles", label: "Roles & Permissions", icon: ShieldCheck }];
+
 export default function AppLayout() {
   const { user: me, logout } = useAuth();
   const navigate = useNavigate();
@@ -103,10 +104,12 @@ export default function AppLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
-  const canFinance = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
-  const canOps = !!me?.companyRole && OPS_COMPANY_ROLES.includes(me.companyRole);
-  const canAssets = !!me?.companyRole && ASSET_COMPANY_ROLES.includes(me.companyRole);
-  const canOwner = !!me?.companyRole && OWNER_COMPANY_ROLES.includes(me.companyRole);
+  const perms = me?.permissions ?? [];
+  const canFinance = perms.includes('finance.view');
+  const canOps = perms.includes('subscriptions.view') || perms.includes('domains.view') || perms.includes('servers.view') || perms.includes('clients.view') || perms.includes('vendors.view');
+  const canAssets = perms.includes('assets.view');
+  const canOwner = perms.includes('invites.manage');
+  const canManageRoles = perms.includes('roles.manage');
 
   const nav = useMemo(() => {
     const items = [...baseNav];
@@ -114,8 +117,9 @@ export default function AppLayout() {
     if (canOps) items.push(...opsNav);
     if (canAssets) items.push(...assetsNav);
     if (canOwner) items.push(...ownerNav);
+    if (canManageRoles) items.push(...adminNav);
     return items;
-  }, [canFinance, canOps, canAssets, canOwner]);
+  }, [canFinance, canOps, canAssets, canOwner, canManageRoles]);
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {

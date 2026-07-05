@@ -19,8 +19,8 @@ function archivedFilter(req) {
  *
  * opts:
  *   Model             - Mongoose model
- *   requireCompanyRole - the auth middleware factory
- *   manageRoles       - roles[] allowed to archive/restore/delete/duplicate/bulk-edit
+ *   manageMiddleware  - Express middleware gating archive/restore/delete/duplicate/
+ *                        bulk-edit, e.g. requirePermission('assets.manage')
  *   patchSchema       - optional zod schema (already .partial()) validating the
  *                        `patch` body of POST /bulk-update; omit to skip that route
  *   beforeDuplicate   - optional async (plainObj, attempt, req) => plainObj,
@@ -29,9 +29,9 @@ function archivedFilter(req) {
  *   resourceName      - singular label used in toast messages, e.g. "Asset"
  */
 function mountCrudExtensions(router, opts) {
-  const { Model, requireCompanyRole, manageRoles, patchSchema, beforeDuplicate, resourceName = 'Record' } = opts;
+  const { Model, manageMiddleware, patchSchema, beforeDuplicate, resourceName = 'Record' } = opts;
 
-  router.patch('/:id/archive', requireCompanyRole(manageRoles), async (req, res, next) => {
+  router.patch('/:id/archive', manageMiddleware, async (req, res, next) => {
     try {
       const doc = await Model.findOneAndUpdate(
         { _id: req.params.id, organization: req.organizationId },
@@ -43,7 +43,7 @@ function mountCrudExtensions(router, opts) {
     } catch (e) { next(e); }
   });
 
-  router.patch('/:id/restore', requireCompanyRole(manageRoles), async (req, res, next) => {
+  router.patch('/:id/restore', manageMiddleware, async (req, res, next) => {
     try {
       const doc = await Model.findOneAndUpdate(
         { _id: req.params.id, organization: req.organizationId },
@@ -55,7 +55,7 @@ function mountCrudExtensions(router, opts) {
     } catch (e) { next(e); }
   });
 
-  router.post('/:id/duplicate', requireCompanyRole(manageRoles), async (req, res, next) => {
+  router.post('/:id/duplicate', manageMiddleware, async (req, res, next) => {
     try {
       const source = await Model.findOne({ _id: req.params.id, organization: req.organizationId }).lean();
       if (!source) throw new ApiError(`${resourceName} not found`, 404);
@@ -84,14 +84,14 @@ function mountCrudExtensions(router, opts) {
     } catch (e) { next(e); }
   });
 
-  router.post('/bulk-delete', requireCompanyRole(manageRoles), validate(idsSchema), async (req, res, next) => {
+  router.post('/bulk-delete', manageMiddleware, validate(idsSchema), async (req, res, next) => {
     try {
       const result = await Model.deleteMany({ _id: { $in: req.body.ids }, organization: req.organizationId });
       return ok(res, { deletedCount: result.deletedCount }, `${result.deletedCount} ${resourceName.toLowerCase()}(s) deleted`);
     } catch (e) { next(e); }
   });
 
-  router.post('/bulk-archive', requireCompanyRole(manageRoles), validate(idsSchema), async (req, res, next) => {
+  router.post('/bulk-archive', manageMiddleware, validate(idsSchema), async (req, res, next) => {
     try {
       const result = await Model.updateMany(
         { _id: { $in: req.body.ids }, organization: req.organizationId },
@@ -101,7 +101,7 @@ function mountCrudExtensions(router, opts) {
     } catch (e) { next(e); }
   });
 
-  router.post('/bulk-restore', requireCompanyRole(manageRoles), validate(idsSchema), async (req, res, next) => {
+  router.post('/bulk-restore', manageMiddleware, validate(idsSchema), async (req, res, next) => {
     try {
       const result = await Model.updateMany(
         { _id: { $in: req.body.ids }, organization: req.organizationId },
@@ -113,7 +113,7 @@ function mountCrudExtensions(router, opts) {
 
   if (patchSchema) {
     const bulkUpdateSchema = z.object({ ids: z.array(z.string()).min(1), patch: patchSchema });
-    router.post('/bulk-update', requireCompanyRole(manageRoles), validate(bulkUpdateSchema), async (req, res, next) => {
+    router.post('/bulk-update', manageMiddleware, validate(bulkUpdateSchema), async (req, res, next) => {
       try {
         const { ids, patch } = req.body;
         const result = await Model.updateMany({ _id: { $in: ids }, organization: req.organizationId }, patch);

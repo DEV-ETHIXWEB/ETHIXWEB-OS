@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Archive, ArchiveRestore, Copy, Loader2, Pencil, Plus, Search, Server as ServerIcon, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { serversApi, type ServerInput } from "@/api/servers";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { FINANCE_COMPANY_ROLES, type ServerAsset, type ServerProvider } from "@/types";
+import type { ServerAsset, ServerProvider } from "@/types";
 import { format } from "date-fns";
 
 const PROVIDERS: ServerProvider[] = ["Railway", "Vercel", "Render", "AWS", "Azure", "GCP", "DigitalOcean", "VPS", "Other"];
@@ -76,8 +76,7 @@ function UsageBar({ used, total, unit }: { used: number; total: number; unit: st
 }
 
 export default function Servers() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('servers.manage');
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const { run: runUndoable } = useUndoableAction();

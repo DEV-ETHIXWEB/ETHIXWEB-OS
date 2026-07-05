@@ -3,7 +3,6 @@ import { Archive, ArchiveRestore, Building2, Copy, Loader2, Pencil, Plus, Trash2
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { departmentsApi, type DepartmentInput } from "@/api/departments";
 import { teamsApi, type TeamInput } from "@/api/teams";
-import { useAuth } from "@/context/AuthContext";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,8 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { HR_COMPANY_ROLES, type DepartmentRecord, type Team } from "@/types";
+import { useHasPermission } from "@/hooks/usePermission";
+import type { DepartmentRecord, Team } from "@/types";
 
 const emptyDeptForm: DepartmentInput = { name: "", color: "#6366F1" };
 const emptyTeamForm: TeamInput = { name: "", members: [] };
@@ -405,8 +405,7 @@ function TeamsTab({ canManage }: { canManage: boolean }) {
 }
 
 export default function Departments() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && HR_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('departments.manage');
 
   return (
     <div className="space-y-6">

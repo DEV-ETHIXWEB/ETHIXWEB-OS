@@ -13,9 +13,6 @@ export type CompanyRole =
   | "employee"
   | "viewer";
 
-export const HR_COMPANY_ROLES: CompanyRole[] = ["superadmin", "owner", "hr"];
-export const OWNER_COMPANY_ROLES: CompanyRole[] = ["superadmin", "owner"];
-
 export interface Organization {
   id: string;
   name: string;
@@ -31,6 +28,29 @@ export interface User {
   organization?: Organization;
   twoFactorEnabled?: boolean;
   emailVerified?: boolean;
+  // Resolved permission set (see backend utils/rolePermissions.js) — drives
+  // all nav/route/action gating on the client. Always present once loaded;
+  // empty array for a role with no elevated grants.
+  permissions?: string[];
+}
+
+export type PermissionKey = string;
+
+export interface RoleDefinition {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PermissionDefinition {
+  key: string;
+  module: string;
+  label: string;
 }
 
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -162,10 +182,6 @@ export interface LeaveRequest {
   status: LeaveStatus;
   createdAt: string;
 }
-
-export const FINANCE_COMPANY_ROLES: CompanyRole[] = ["superadmin", "owner", "finance"];
-export const OPS_COMPANY_ROLES: CompanyRole[] = ["superadmin", "owner", "finance", "manager"];
-export const ASSET_COMPANY_ROLES: CompanyRole[] = ["superadmin", "owner", "finance", "manager", "hr"];
 
 // --- Payroll ---
 export interface PayLineItem {

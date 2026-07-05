@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Archive, ArchiveRestore, Copy, ExternalLink, Globe2, Loader2, Pencil, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { domainsApi, type DomainInput } from "@/api/domains";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { FINANCE_COMPANY_ROLES, type Domain } from "@/types";
+import type { Domain } from "@/types";
 import { format } from "date-fns";
 
 const STATUS_STYLE: Record<Domain["status"], string> = {
@@ -51,8 +51,7 @@ function toEditForm(d: Domain): DomainInput {
 }
 
 export default function Domains() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('domains.manage');
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const { run: runUndoable } = useUndoableAction();

@@ -1,15 +1,13 @@
 const express = require('express');
 const { z } = require('zod');
 const Team = require('../models/Team');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const HR_ROLES = ['superadmin', 'owner', 'hr'];
 
 function populateTeam(query) {
   return query
@@ -44,7 +42,7 @@ const bodySchema = z.object({
   description: z.string().max(500).optional().default(''),
 });
 
-router.post('/', requireCompanyRole(HR_ROLES), validate(bodySchema), async (req, res, next) => {
+router.post('/', requirePermission('teams.manage'), validate(bodySchema), async (req, res, next) => {
   try {
     const team = await Team.create({ ...req.body, organization: req.organizationId });
     const populated = await populateTeam(Team.findById(team._id)).lean();
@@ -52,7 +50,7 @@ router.post('/', requireCompanyRole(HR_ROLES), validate(bodySchema), async (req,
   } catch (e) { next(e); }
 });
 
-router.patch('/:id', requireCompanyRole(HR_ROLES), validate(bodySchema.partial()), async (req, res, next) => {
+router.patch('/:id', requirePermission('teams.manage'), validate(bodySchema.partial()), async (req, res, next) => {
   try {
     const team = await populateTeam(
       Team.findOneAndUpdate({ _id: req.params.id, organization: req.organizationId }, req.body, { new: true })
@@ -62,7 +60,7 @@ router.patch('/:id', requireCompanyRole(HR_ROLES), validate(bodySchema.partial()
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('teams.manage'), async (req, res, next) => {
   try {
     const team = await Team.findOneAndDelete({ _id: req.params.id, organization: req.organizationId });
     if (!team) throw new ApiError('Team not found', 404);
@@ -72,8 +70,7 @@ router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
 
 mountCrudExtensions(router, {
   Model: Team,
-  requireCompanyRole,
-  manageRoles: HR_ROLES,
+  manageMiddleware: requirePermission('teams.manage'),
   patchSchema: bodySchema.partial(),
   resourceName: 'Team',
   beforeDuplicate: async (obj, attempt) => {

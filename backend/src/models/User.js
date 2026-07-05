@@ -29,6 +29,11 @@ const UserSchema = new mongoose.Schema(
       enum: ['superadmin', 'owner', 'hr', 'finance', 'manager', 'developer', 'designer', 'qa', 'employee', 'viewer'],
       default: 'employee',
     },
+    // Preferred going forward: resolves the user's actual permission set via
+    // a Role document (system role customized per-org, or a fully custom
+    // role). Nullable so existing users keep working unchanged, falling back
+    // to companyRole -> DEFAULT_ROLE_PERMISSIONS (see middleware/auth.js).
+    role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', default: null },
     resetTokenHash: { type: String, default: null, index: true },
     resetTokenExpires: { type: Date, default: null },
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const Asset = require('../models/Asset');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
@@ -9,10 +9,7 @@ const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions
 const router = express.Router();
 router.use(requireAuth);
 
-const READ_ROLES = ['superadmin', 'owner', 'finance', 'manager', 'hr'];
-const MANAGE_ROLES = ['superadmin', 'owner', 'finance', 'manager', 'hr'];
-
-router.use(requireCompanyRole(READ_ROLES));
+router.use(requirePermission('assets.view'));
 
 router.get('/', async (req, res, next) => {
   try {
@@ -51,7 +48,7 @@ const bodySchema = z.object({
   notes: z.string().max(1000).optional().default(''),
 });
 
-router.post('/', requireCompanyRole(MANAGE_ROLES), validate(bodySchema), async (req, res, next) => {
+router.post('/', requirePermission('assets.manage'), validate(bodySchema), async (req, res, next) => {
   try {
     const asset = await Asset.create({ ...req.body, organization: req.organizationId });
     const populated = await Asset.findById(asset._id).populate('assignedTo', 'name employeeId photoUrl').lean();
@@ -59,7 +56,7 @@ router.post('/', requireCompanyRole(MANAGE_ROLES), validate(bodySchema), async (
   } catch (e) { next(e); }
 });
 
-router.patch('/:id', requireCompanyRole(MANAGE_ROLES), validate(bodySchema.partial()), async (req, res, next) => {
+router.patch('/:id', requirePermission('assets.manage'), validate(bodySchema.partial()), async (req, res, next) => {
   try {
     const asset = await Asset.findOneAndUpdate(
       { _id: req.params.id, organization: req.organizationId },
@@ -71,7 +68,7 @@ router.patch('/:id', requireCompanyRole(MANAGE_ROLES), validate(bodySchema.parti
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(MANAGE_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('assets.manage'), async (req, res, next) => {
   try {
     const asset = await Asset.findOneAndDelete({ _id: req.params.id, organization: req.organizationId });
     if (!asset) throw new ApiError('Asset not found', 404);
@@ -81,8 +78,7 @@ router.delete('/:id', requireCompanyRole(MANAGE_ROLES), async (req, res, next) =
 
 mountCrudExtensions(router, {
   Model: Asset,
-  requireCompanyRole,
-  manageRoles: MANAGE_ROLES,
+  manageMiddleware: requirePermission('assets.manage'),
   patchSchema: bodySchema.partial(),
   resourceName: 'Asset',
   beforeDuplicate: async (obj) => {

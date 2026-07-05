@@ -1,15 +1,13 @@
 const express = require('express');
 const { z } = require('zod');
 const Department = require('../models/Department');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const HR_ROLES = ['superadmin', 'owner', 'hr'];
 
 // Read: any authenticated user (org structure is org-wide directory info, like Employees).
 router.get('/', async (req, res, next) => {
@@ -37,7 +35,7 @@ const bodySchema = z.object({
   color: z.string().regex(/^#?[0-9a-fA-F]{6}$/, 'Invalid color').optional(),
 });
 
-router.post('/', requireCompanyRole(HR_ROLES), validate(bodySchema), async (req, res, next) => {
+router.post('/', requirePermission('departments.manage'), validate(bodySchema), async (req, res, next) => {
   try {
     const department = await Department.create({ ...req.body, organization: req.organizationId });
     const populated = await Department.findById(department._id).populate('manager', 'name employeeId photoUrl').lean();
@@ -45,7 +43,7 @@ router.post('/', requireCompanyRole(HR_ROLES), validate(bodySchema), async (req,
   } catch (e) { next(e); }
 });
 
-router.patch('/:id', requireCompanyRole(HR_ROLES), validate(bodySchema.partial()), async (req, res, next) => {
+router.patch('/:id', requirePermission('departments.manage'), validate(bodySchema.partial()), async (req, res, next) => {
   try {
     const department = await Department.findOneAndUpdate(
       { _id: req.params.id, organization: req.organizationId },
@@ -57,7 +55,7 @@ router.patch('/:id', requireCompanyRole(HR_ROLES), validate(bodySchema.partial()
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('departments.manage'), async (req, res, next) => {
   try {
     const department = await Department.findOneAndDelete({ _id: req.params.id, organization: req.organizationId });
     if (!department) throw new ApiError('Department not found', 404);
@@ -67,8 +65,7 @@ router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
 
 mountCrudExtensions(router, {
   Model: Department,
-  requireCompanyRole,
-  manageRoles: HR_ROLES,
+  manageMiddleware: requirePermission('departments.manage'),
   patchSchema: bodySchema.partial(),
   resourceName: 'Department',
   beforeDuplicate: async (obj, attempt) => {

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Project = require('../models/Project');
 const { ApiError } = require('../utils/respond');
 const { isIpAllowed } = require('../utils/ipAllowlist');
+const { resolvePermissions } = require('../utils/rolePermissions');
 
 async function requireAuth(req, _res, next) {
   try {
@@ -18,7 +19,10 @@ async function requireAuth(req, _res, next) {
     }
     if (payload.type && payload.type !== 'access') throw new ApiError('Invalid or expired token', 401);
 
-    const user = await User.findById(payload.sub).populate('organization', 'ipAllowlist status').lean();
+    const user = await User.findById(payload.sub)
+      .populate('organization', 'ipAllowlist status')
+      .populate('role', 'permissions')
+      .lean();
     if (!user) throw new ApiError('User no longer exists', 401);
     if (user.organization?.status === 'suspended') throw new ApiError('This workspace has been suspended', 403);
 
@@ -27,12 +31,18 @@ async function requireAuth(req, _res, next) {
     }
 
     req.organizationId = String(user.organization?._id || user.organization);
+    const permissions = await resolvePermissions({
+      organizationId: req.organizationId,
+      companyRole: user.companyRole,
+      role: user.role,
+    });
     req.user = {
       id: String(user._id),
       email: user.email,
       name: user.name,
       companyRole: user.companyRole,
       organization: req.organizationId,
+      permissions,
     };
     next();
   } catch (e) {
@@ -44,10 +54,29 @@ async function requireAuth(req, _res, next) {
  * Restricts access to a set of company-wide roles (superadmin/owner/hr/...).
  * Independent from requireProjectRole; this governs company modules (Employees,
  * and future Payroll/Finance), not per-project Kanban permissions.
+ *
+ * Prefer requirePermission() for anything new — this is kept for the couple
+ * of routes (invites, org settings, roles admin) that are deliberately
+ * owner/superadmin-only regardless of what a custom role might grant.
  */
 function requireCompanyRole(roles = []) {
   return (req, _res, next) => {
     if (!roles.includes(req.user?.companyRole)) {
+      return next(new ApiError('You do not have permission to perform this action', 403));
+    }
+    next();
+  };
+}
+
+/**
+ * Restricts access based on the requester's resolved permission set (see
+ * utils/rolePermissions.js) instead of a hardcoded company-role array — the
+ * actual grant is data (a Role document), editable per-organization through
+ * the Roles admin UI, not a code change.
+ */
+function requirePermission(key) {
+  return (req, _res, next) => {
+    if (!req.user?.permissions?.includes(key)) {
       return next(new ApiError('You do not have permission to perform this action', 403));
     }
     next();
@@ -90,4 +119,4 @@ function requireProjectRole(opts = {}) {
   };
 }
 
-module.exports = { requireAuth, requireProjectRole, requireCompanyRole };
+module.exports = { requireAuth, requireProjectRole, requireCompanyRole, requirePermission };

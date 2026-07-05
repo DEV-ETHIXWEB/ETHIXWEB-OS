@@ -1,15 +1,13 @@
 const express = require('express');
 const { z } = require('zod');
 const Organization = require('../models/Organization');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { logAudit } = require('../utils/audit');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const OWNER_ROLES = ['superadmin', 'owner'];
 
 // Accepts an exact IPv4 address or an IPv4 CIDR block (e.g. "203.0.113.0/24").
 const ipEntrySchema = z
@@ -19,7 +17,7 @@ const ipEntrySchema = z
 
 const ipAllowlistSchema = z.object({ ipAllowlist: z.array(ipEntrySchema).max(50) });
 
-router.patch('/me/ip-allowlist', requireCompanyRole(OWNER_ROLES), validate(ipAllowlistSchema), async (req, res, next) => {
+router.patch('/me/ip-allowlist', requirePermission('organization.manage_settings'), validate(ipAllowlistSchema), async (req, res, next) => {
   try {
     const org = await Organization.findByIdAndUpdate(
       req.organizationId,

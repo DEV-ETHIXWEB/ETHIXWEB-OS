@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const Employee = require('../models/Employee');
 const Organization = require('../models/Organization');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { uploadPhoto, uploadDocument, uploadToBlob } = require('../middleware/upload');
 const { ok, ApiError } = require('../utils/respond');
@@ -14,17 +14,16 @@ const { uploadLimiter, writeLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 router.use(requireAuth);
 
-const HR_ROLES = ['superadmin', 'owner', 'hr'];
-const SENSITIVE_DATA_ROLES = ['superadmin', 'owner', 'hr', 'finance'];
-
 // The employee directory is intentionally readable by everyone authenticated
-// (see GET / below), but salary and bank details are not — only HR/Finance/
-// Owner/Superadmin, or the employee viewing their own linked record, get
-// those fields. Bank fields are encrypted at rest (Employee model `set`), so
-// they're explicitly decrypted here for the callers who are allowed to see them.
+// (see GET / below), but salary and bank details are not — only whoever
+// holds the employees.view_sensitive permission (HR/Finance/Owner/Superadmin
+// by default, or any custom role granted it), or the employee viewing their
+// own linked record, get those fields. Bank fields are encrypted at rest
+// (Employee model `set`), so they're explicitly decrypted here for the
+// callers who are allowed to see them.
 function sanitizeEmployee(doc, requester) {
   const obj = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
-  const isPrivileged = !!requester?.companyRole && SENSITIVE_DATA_ROLES.includes(requester.companyRole);
+  const isPrivileged = !!requester?.permissions?.includes('employees.view_sensitive');
   const isSelf = !!obj.user && !!requester?.id && String(obj.user) === String(requester.id);
   if (isPrivileged || isSelf) {
     if (obj.bankDetails) {
@@ -102,7 +101,7 @@ const createSchema = z.object({
   notes: z.string().max(2000).optional().default(''),
 });
 
-router.post('/', writeLimiter, requireCompanyRole(HR_ROLES), validate(createSchema), async (req, res, next) => {
+router.post('/', writeLimiter, requirePermission('employees.manage'), validate(createSchema), async (req, res, next) => {
   try {
     const employeeId = await nextEmployeeId(req.organizationId);
     const employee = await Employee.create({ ...req.body, employeeId, organization: req.organizationId });
@@ -119,7 +118,7 @@ const updateSchema = createSchema.partial().extend({
     .optional(),
 });
 
-router.patch('/:id', writeLimiter, requireCompanyRole(HR_ROLES), validate(updateSchema), async (req, res, next) => {
+router.patch('/:id', writeLimiter, requirePermission('employees.manage'), validate(updateSchema), async (req, res, next) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!employee) throw new ApiError('Employee not found', 404);
@@ -138,7 +137,7 @@ router.patch('/:id', writeLimiter, requireCompanyRole(HR_ROLES), validate(update
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('employees.manage'), async (req, res, next) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!employee) throw new ApiError('Employee not found', 404);
@@ -148,7 +147,7 @@ router.delete('/:id', requireCompanyRole(HR_ROLES), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:id/photo', uploadLimiter, requireCompanyRole(HR_ROLES), uploadPhoto.single('photo'), async (req, res, next) => {
+router.post('/:id/photo', uploadLimiter, requirePermission('employees.manage'), uploadPhoto.single('photo'), async (req, res, next) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!employee) throw new ApiError('Employee not found', 404);
@@ -159,7 +158,7 @@ router.post('/:id/photo', uploadLimiter, requireCompanyRole(HR_ROLES), uploadPho
   } catch (e) { next(e); }
 });
 
-router.post('/:id/documents', uploadLimiter, requireCompanyRole(HR_ROLES), uploadDocument.single('document'), async (req, res, next) => {
+router.post('/:id/documents', uploadLimiter, requirePermission('employees.manage'), uploadDocument.single('document'), async (req, res, next) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!employee) throw new ApiError('Employee not found', 404);
@@ -174,8 +173,7 @@ router.post('/:id/documents', uploadLimiter, requireCompanyRole(HR_ROLES), uploa
 
 mountCrudExtensions(router, {
   Model: Employee,
-  requireCompanyRole,
-  manageRoles: HR_ROLES,
+  manageMiddleware: requirePermission('employees.manage'),
   patchSchema: updateSchema,
   resourceName: 'Employee',
   beforeDuplicate: async (obj, _attempt, req) => {

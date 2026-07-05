@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Archive, ArchiveRestore, Briefcase, Copy, Eye, Loader2, Pencil, Plus, Search, Trash2, UserPlus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { employeesApi, type CreateEmployeeInput } from "@/api/employees";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { HR_COMPANY_ROLES, type Department, type Employee, type EmployeeStatus } from "@/types";
+import type { Department, Employee, EmployeeStatus } from "@/types";
 import { format } from "date-fns";
 
 const DEPARTMENTS: Department[] = ["Engineering", "Design", "HR", "Finance", "Sales", "Marketing", "Operations", "Support"];
@@ -54,10 +54,9 @@ function toEditForm(e: Employee): CreateEmployeeInput {
 }
 
 export default function Employees() {
-  const { user: me } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const canManage = !!me?.companyRole && HR_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('employees.manage');
   const [params, setParams] = useSearchParams();
   const { run: runUndoable } = useUndoableAction();
 

@@ -32,6 +32,7 @@ const { nextEmployeeId } = require('./employees');
 const { sendEmail } = require('../utils/email');
 const { logAudit } = require('../utils/audit');
 const { decryptField } = require('../utils/encryption');
+const { resolvePermissions } = require('../utils/rolePermissions');
 const { authLimiter, accountLimiter } = require('../middleware/rateLimit');
 const logger = require('../utils/logger');
 
@@ -129,6 +130,21 @@ async function issueSession(user, req, res) {
   return accessToken;
 }
 
+// Every response that hands the frontend a User object also needs its
+// resolved permission set (see utils/rolePermissions.js) so nav/route
+// gating on the client can be permission-driven instead of re-hardcoding
+// company-role arrays there too.
+async function buildUserPayload(userId) {
+  const user = await User.findById(userId).populate('organization', 'name slug').populate('role', 'name permissions');
+  if (!user) return null;
+  const permissions = await resolvePermissions({
+    organizationId: String(user.organization?._id || user.organization),
+    companyRole: user.companyRole,
+    role: user.role,
+  });
+  return { ...user.toJSON(), permissions };
+}
+
 async function recordLoginEvent(user, req, success, reason) {
   try {
     await LoginEvent.create({
@@ -217,8 +233,7 @@ router.post('/signup', accountLimiter, validate(signupSchema), async (req, res, 
 
       await sendVerificationEmail(user);
       const accessToken = await issueSession(user, req, res);
-      const populated = await User.findById(user._id).populate('organization', 'name slug');
-      return ok(res, { token: accessToken, user: populated.toJSON() }, 'Account created', 201);
+      return ok(res, { token: accessToken, user: await buildUserPayload(user._id) }, 'Account created', 201);
     }
 
     // mode === 'create_org'
@@ -258,8 +273,7 @@ router.post('/signup', accountLimiter, validate(signupSchema), async (req, res, 
 
     await sendVerificationEmail(user);
     const accessToken = await issueSession(user, req, res);
-    const populated = await User.findById(user._id).populate('organization', 'name slug');
-    return ok(res, { token: accessToken, user: populated.toJSON() }, 'Account created', 201);
+    return ok(res, { token: accessToken, user: await buildUserPayload(user._id) }, 'Account created', 201);
   } catch (e) { next(e); }
 });
 
@@ -297,8 +311,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res, next)
     }
 
     const accessToken = await issueSession(user, req, res);
-    const populated = await User.findById(user._id).populate('organization', 'name slug');
-    return ok(res, { token: accessToken, user: populated.toJSON() }, 'Signed in');
+    return ok(res, { token: accessToken, user: await buildUserPayload(user._id) }, 'Signed in');
   } catch (e) { next(e); }
 });
 
@@ -340,16 +353,15 @@ router.post('/login/verify-2fa', authLimiter, validate(mfaVerifySchema), async (
     if (!ok2fa) throw new ApiError('Invalid code', 401);
 
     const accessToken = await issueSession(user, req, res);
-    const populated = await User.findById(user._id).populate('organization', 'name slug');
-    return ok(res, { token: accessToken, user: populated.toJSON() }, 'Signed in');
+    return ok(res, { token: accessToken, user: await buildUserPayload(user._id) }, 'Signed in');
   } catch (e) { next(e); }
 });
 
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).populate('organization', 'name slug');
+    const user = await buildUserPayload(req.user.id);
     if (!user) throw new ApiError('User not found', 404);
-    return ok(res, { user: user.toJSON() });
+    return ok(res, { user });
   } catch (e) { next(e); }
 });
 

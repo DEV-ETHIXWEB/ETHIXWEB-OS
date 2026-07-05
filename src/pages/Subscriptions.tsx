@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Archive, ArchiveRestore, Copy, CreditCard, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { subscriptionsApi, type SubscriptionInput } from "@/api/subscriptions";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { FINANCE_COMPANY_ROLES, type BillingCycle, type Subscription } from "@/types";
+import type { BillingCycle, Subscription } from "@/types";
 import { format } from "date-fns";
 
 const BILLING_CYCLES: BillingCycle[] = ["monthly", "yearly", "weekly", "custom"];
@@ -52,8 +52,7 @@ function toEditForm(s: Subscription): SubscriptionInput {
 }
 
 export default function Subscriptions() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('subscriptions.manage');
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const { run: runUndoable } = useUndoableAction();

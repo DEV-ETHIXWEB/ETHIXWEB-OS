@@ -8,7 +8,7 @@ import { employeesApi, type CreateEmployeeInput } from "@/api/employees";
 import { attendanceApi } from "@/api/attendance";
 import { leavesApi } from "@/api/leaves";
 import { payrollApi } from "@/api/payroll";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { FINANCE_COMPANY_ROLES, HR_COMPANY_ROLES, type Department, type Employee, type EmployeeStatus } from "@/types";
+import type { Department, Employee, EmployeeStatus } from "@/types";
 
 const DEPARTMENTS: Department[] = ["Engineering", "Design", "HR", "Finance", "Sales", "Marketing", "Operations", "Support"];
 const STATUSES: EmployeeStatus[] = ["active", "on_leave", "resigned", "terminated"];
@@ -48,11 +48,10 @@ const STATUS_STYLE: Record<Employee["status"], string> = {
 
 export default function EmployeeDetail() {
   const { employeeId = "" } = useParams<{ employeeId: string }>();
-  const { user: me } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const canManage = !!me?.companyRole && HR_COMPANY_ROLES.includes(me.companyRole);
-  const canViewPayroll = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('employees.manage');
+  const canViewPayroll = useHasPermission('payroll.view_all');
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<CreateEmployeeInput>({ name: "", email: "", department: "Engineering", designation: "", joiningDate: new Date().toISOString() });

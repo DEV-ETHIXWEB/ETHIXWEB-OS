@@ -4,7 +4,7 @@ const PDFDocument = require('pdfkit');
 const { z } = require('zod');
 const Payslip = require('../models/Payslip');
 const Employee = require('../models/Employee');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { mountCrudExtensions, archivedFilter } = require('../utils/crudExtensions');
@@ -14,10 +14,8 @@ const { writeLimiter, exportLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 router.use(requireAuth);
 
-const FINANCE_ROLES = ['superadmin', 'owner', 'finance'];
-
 async function canViewPayslip(req, payslip) {
-  if (FINANCE_ROLES.includes(req.user.companyRole)) return true;
+  if (req.user.permissions.includes('payroll.view_all')) return true;
   const employee = await Employee.findOne({ _id: payslip.employee, organization: req.organizationId }).select('user').lean();
   return !!employee?.user && String(employee.user) === req.user.id;
 }
@@ -35,7 +33,7 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
     const filter = { organization: req.organizationId, archived: archivedFilter(req) };
     if (month) filter.month = month;
 
-    if (FINANCE_ROLES.includes(req.user.companyRole)) {
+    if (req.user.permissions.includes('payroll.view_all')) {
       if (employee) filter.employee = employee;
     } else {
       const myEmployee = await Employee.findOne({ user: req.user.id, organization: req.organizationId }).select('_id').lean();
@@ -51,7 +49,7 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
 const trendQuerySchema = z.object({ months: z.coerce.number().int().min(1).max(24).optional() });
 
 // --- Dashboard: net pay + base salary totals per month, last N months ---
-router.get('/trend', requireCompanyRole(FINANCE_ROLES), validate(trendQuerySchema, 'query'), async (req, res, next) => {
+router.get('/trend', requirePermission('payroll.view_all'), validate(trendQuerySchema, 'query'), async (req, res, next) => {
   try {
     const months = Math.min(24, Math.max(1, Number(req.query.months) || 12));
     const since = new Date();
@@ -93,7 +91,7 @@ router.get('/:id', async (req, res, next) => {
 const generateSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM') });
 
 // --- Bulk-generate payslips for all active employees for a month (idempotent) ---
-router.post('/generate', writeLimiter, requireCompanyRole(FINANCE_ROLES), validate(generateSchema), async (req, res, next) => {
+router.post('/generate', writeLimiter, requirePermission('payroll.manage'), validate(generateSchema), async (req, res, next) => {
   try {
     const { month } = req.body;
     const employees = await Employee.find({ status: 'active', organization: req.organizationId }).lean();
@@ -124,7 +122,7 @@ const updateSchema = z.object({
   paymentStatus: z.enum(['pending', 'paid']).optional(),
 });
 
-router.patch('/:id', requireCompanyRole(FINANCE_ROLES), validate(updateSchema), async (req, res, next) => {
+router.patch('/:id', requirePermission('payroll.manage'), validate(updateSchema), async (req, res, next) => {
   try {
     const payslip = await Payslip.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!payslip) throw new ApiError('Payslip not found', 404);
@@ -135,7 +133,7 @@ router.patch('/:id', requireCompanyRole(FINANCE_ROLES), validate(updateSchema), 
   } catch (e) { next(e); }
 });
 
-router.post('/:id/mark-paid', requireCompanyRole(FINANCE_ROLES), async (req, res, next) => {
+router.post('/:id/mark-paid', requirePermission('payroll.manage'), async (req, res, next) => {
   try {
     const payslip = await Payslip.findOne({ _id: req.params.id, organization: req.organizationId });
     if (!payslip) throw new ApiError('Payslip not found', 404);
@@ -147,7 +145,7 @@ router.post('/:id/mark-paid', requireCompanyRole(FINANCE_ROLES), async (req, res
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(FINANCE_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('payroll.manage'), async (req, res, next) => {
   try {
     const payslip = await Payslip.findOneAndDelete({ _id: req.params.id, organization: req.organizationId });
     if (!payslip) throw new ApiError('Payslip not found', 404);
@@ -199,8 +197,7 @@ router.get('/:id/pdf', exportLimiter, async (req, res, next) => {
 
 mountCrudExtensions(router, {
   Model: Payslip,
-  requireCompanyRole,
-  manageRoles: FINANCE_ROLES,
+  manageMiddleware: requirePermission('payroll.manage'),
   patchSchema: updateSchema.partial(),
   resourceName: 'Payslip',
 });

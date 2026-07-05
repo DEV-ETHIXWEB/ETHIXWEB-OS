@@ -1,4 +1,4 @@
-import type { AssetRecord, AttendanceRecord, Client, DepartmentRecord, Domain, Employee, Invite, LeaveRequest, Member, Organization, Payslip, ServerAsset, Subscription, Team, Transaction, Project, Task, User, Vendor } from "@/types";
+import type { AssetRecord, AttendanceRecord, Client, DepartmentRecord, Domain, Employee, Invite, LeaveRequest, Member, Organization, Payslip, RoleDefinition, ServerAsset, Subscription, Team, Transaction, Project, Task, User, Vendor } from "@/types";
 
 const COLORS = ["#6366F1", "#A855F7", "#22D3EE", "#F472B6", "#34D399", "#FB923C"];
 
@@ -32,6 +32,7 @@ interface RawUser {
   organization?: RawOrganization | string;
   twoFactorEnabled?: boolean;
   emailVerified?: boolean;
+  permissions?: string[];
 }
 
 export function normUser(raw: RawUser | string | null | undefined): User | null {
@@ -50,6 +51,21 @@ export function normUser(raw: RawUser | string | null | undefined): User | null 
     organization: normOrganization(raw.organization),
     twoFactorEnabled: raw.twoFactorEnabled ?? false,
     emailVerified: raw.emailVerified ?? false,
+    permissions: raw.permissions ?? [],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normRole(raw: any): RoleDefinition {
+  return {
+    id: String(raw._id ?? raw.id ?? ""),
+    key: raw.key,
+    name: raw.name,
+    description: raw.description ?? "",
+    isSystem: raw.isSystem ?? false,
+    permissions: raw.permissions ?? [],
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+    updatedAt: raw.updatedAt ?? new Date().toISOString(),
   };
 }
 

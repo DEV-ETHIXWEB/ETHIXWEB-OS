@@ -35,6 +35,7 @@ const departmentRoutes = require('./routes/departments');
 const teamRoutes = require('./routes/teams');
 const fileRoutes = require('./routes/files');
 const organizationRoutes = require('./routes/organizations');
+const roleRoutes = require('./routes/roles');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -153,11 +154,12 @@ app.use('/departments', departmentRoutes);
 app.use('/teams', teamRoutes);
 app.use('/files', fileRoutes);
 app.use('/organizations', organizationRoutes);
+app.use('/roles', roleRoutes);
 
 if (process.env.NODE_ENV === 'production') {
   const frontendDistPath = path.resolve(__dirname, '../../dist');
   app.use(express.static(frontendDistPath));
-  const apiPrefixes = ['/auth', '/invites', '/projects', '/tasks', '/users', '/files', '/organizations'];
+  const apiPrefixes = ['/auth', '/invites', '/projects', '/tasks', '/users', '/files', '/organizations', '/roles'];
   app.get('*', (_req, res, next) => {
     if (apiPrefixes.some((p) => _req.path.startsWith(p))) {
       return next();

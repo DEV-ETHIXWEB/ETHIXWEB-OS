@@ -20,14 +20,14 @@ import { domainsApi } from "@/api/domains";
 import { serversApi } from "@/api/servers";
 import { financeApi } from "@/api/finance";
 import { useAuth } from "@/context/AuthContext";
-import { FINANCE_COMPANY_ROLES, OPS_COMPANY_ROLES } from "@/types";
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canFinance = !!user?.companyRole && FINANCE_COMPANY_ROLES.includes(user.companyRole);
-  const canOps = !!user?.companyRole && OPS_COMPANY_ROLES.includes(user.companyRole);
+  const perms = user?.permissions ?? [];
+  const canFinance = perms.includes('finance.view');
+  const canOps = perms.includes('subscriptions.view') || perms.includes('domains.view') || perms.includes('servers.view') || perms.includes('clients.view') || perms.includes('vendors.view');
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

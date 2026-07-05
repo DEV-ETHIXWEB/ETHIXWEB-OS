@@ -9,9 +9,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
 import Landing from "@/pages/Landing";
 import { RequireAuth } from "@/components/RequireAuth";
-import { RequireCompanyRole } from "@/components/RequireCompanyRole";
+import { RequirePermission } from "@/components/RequirePermission";
 import { AuthProvider } from "@/context/AuthContext";
-import { ASSET_COMPANY_ROLES, FINANCE_COMPANY_ROLES, OPS_COMPANY_ROLES, OWNER_COMPANY_ROLES } from "@/types";
 
 // Route-level code splitting: keep the marketing Landing page eager (it's the
 // most common first paint), lazy-load everything behind auth/navigation so
@@ -35,6 +34,7 @@ const Clients = lazy(() => import("@/pages/Clients"));
 const Vendors = lazy(() => import("@/pages/Vendors"));
 const Departments = lazy(() => import("@/pages/Departments"));
 const Security = lazy(() => import("@/pages/Security"));
+const RolesAdmin = lazy(() => import("@/pages/RolesAdmin"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 function RouteFallback() {
@@ -83,17 +83,18 @@ const App = () => (
                   <Route path="projects/:projectId" element={<ProjectDetail />} />
                   <Route path="employees" element={<Employees />} />
                   <Route path="employees/:employeeId" element={<EmployeeDetail />} />
-                  <Route path="payroll" element={<RequireCompanyRole roles={FINANCE_COMPANY_ROLES}><Payroll /></RequireCompanyRole>} />
-                  <Route path="subscriptions" element={<RequireCompanyRole roles={OPS_COMPANY_ROLES}><Subscriptions /></RequireCompanyRole>} />
-                  <Route path="domains" element={<RequireCompanyRole roles={OPS_COMPANY_ROLES}><Domains /></RequireCompanyRole>} />
-                  <Route path="servers" element={<RequireCompanyRole roles={OPS_COMPANY_ROLES}><Servers /></RequireCompanyRole>} />
-                  <Route path="finance" element={<RequireCompanyRole roles={FINANCE_COMPANY_ROLES}><Finance /></RequireCompanyRole>} />
-                  <Route path="team" element={<RequireCompanyRole roles={OWNER_COMPANY_ROLES}><Team /></RequireCompanyRole>} />
-                  <Route path="assets" element={<RequireCompanyRole roles={ASSET_COMPANY_ROLES}><Assets /></RequireCompanyRole>} />
-                  <Route path="clients" element={<RequireCompanyRole roles={OPS_COMPANY_ROLES}><Clients /></RequireCompanyRole>} />
-                  <Route path="vendors" element={<RequireCompanyRole roles={OPS_COMPANY_ROLES}><Vendors /></RequireCompanyRole>} />
+                  <Route path="payroll" element={<RequirePermission anyOf={["payroll.view_all", "payroll.manage"]}><Payroll /></RequirePermission>} />
+                  <Route path="subscriptions" element={<RequirePermission anyOf={["subscriptions.view"]}><Subscriptions /></RequirePermission>} />
+                  <Route path="domains" element={<RequirePermission anyOf={["domains.view"]}><Domains /></RequirePermission>} />
+                  <Route path="servers" element={<RequirePermission anyOf={["servers.view"]}><Servers /></RequirePermission>} />
+                  <Route path="finance" element={<RequirePermission anyOf={["finance.view"]}><Finance /></RequirePermission>} />
+                  <Route path="team" element={<RequirePermission anyOf={["invites.manage"]}><Team /></RequirePermission>} />
+                  <Route path="assets" element={<RequirePermission anyOf={["assets.view"]}><Assets /></RequirePermission>} />
+                  <Route path="clients" element={<RequirePermission anyOf={["clients.view"]}><Clients /></RequirePermission>} />
+                  <Route path="vendors" element={<RequirePermission anyOf={["vendors.view"]}><Vendors /></RequirePermission>} />
                   <Route path="departments" element={<Departments />} />
                   <Route path="security" element={<Security />} />
+                  <Route path="admin/roles" element={<RequirePermission anyOf={["roles.manage"]}><RolesAdmin /></RequirePermission>} />
                 </Route>
                 <Route path="/dashboard" element={<Navigate to="/app" replace />} />
                 <Route path="*" element={<NotFound />} />

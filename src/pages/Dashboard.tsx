@@ -65,7 +65,6 @@ import { attendanceApi } from "@/api/attendance";
 import { subscriptionsApi } from "@/api/subscriptions";
 import { domainsApi } from "@/api/domains";
 import { serversApi } from "@/api/servers";
-import { FINANCE_COMPANY_ROLES, HR_COMPANY_ROLES, OPS_COMPANY_ROLES } from "@/types";
 
 const STATUS_COLORS: Record<string, string> = {
   todo: "hsl(var(--muted-foreground))",
@@ -93,9 +92,10 @@ export default function Dashboard() {
   const activeEmployees = employees.filter((e) => e.status === "active").length;
   const onLeaveToday = employees.filter((e) => e.status === "on_leave").length;
 
-  const canFinance = !!me?.companyRole && FINANCE_COMPANY_ROLES.includes(me.companyRole);
-  const canOps = !!me?.companyRole && OPS_COMPANY_ROLES.includes(me.companyRole);
-  const canHR = !!me?.companyRole && HR_COMPANY_ROLES.includes(me.companyRole);
+  const perms = me?.permissions ?? [];
+  const canFinance = perms.includes('finance.view');
+  const canOps = perms.includes('subscriptions.view') || perms.includes('domains.view') || perms.includes('servers.view') || perms.includes('clients.view') || perms.includes('vendors.view');
+  const canHR = perms.includes('employees.manage');
   const currentMonth = format(new Date(), "yyyy-MM");
   const currentYear = format(new Date(), "yyyy");
 

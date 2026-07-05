@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Archive, ArchiveRestore, Copy, Laptop, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assetsApi, type AssetInput } from "@/api/assets";
-import { useAuth } from "@/context/AuthContext";
+import { useHasPermission } from "@/hooks/usePermission";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
@@ -18,7 +18,7 @@ import { ArchivedToggle } from "@/components/ArchivedToggle";
 import { DataTable, type DataTableColumn, type RowAction } from "@/components/DataTable";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api";
-import { ASSET_COMPANY_ROLES, type AssetCategory, type AssetRecord, type AssetStatus } from "@/types";
+import type { AssetCategory, AssetRecord, AssetStatus } from "@/types";
 
 const CATEGORIES: AssetCategory[] = ["Laptop", "Desktop", "Monitor", "Phone", "Software License", "Furniture", "Networking", "Other"];
 const STATUSES: AssetStatus[] = ["available", "in_use", "maintenance", "retired"];
@@ -53,8 +53,7 @@ function toEditForm(a: AssetRecord): AssetInput {
 }
 
 export default function Assets() {
-  const { user: me } = useAuth();
-  const canManage = !!me?.companyRole && ASSET_COMPANY_ROLES.includes(me.companyRole);
+  const canManage = useHasPermission('assets.manage');
   const qc = useQueryClient();
   const { employees } = useEmployees();
   const { run: runUndoable } = useUndoableAction();

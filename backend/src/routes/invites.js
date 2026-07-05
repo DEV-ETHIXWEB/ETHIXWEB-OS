@@ -2,15 +2,13 @@ const express = require('express');
 const crypto = require('crypto');
 const { z } = require('zod');
 const Invite = require('../models/Invite');
-const { requireAuth, requireCompanyRole } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { ok, ApiError } = require('../utils/respond');
 const { logAudit } = require('../utils/audit');
 const { writeLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
-
-const OWNER_ROLES = ['superadmin', 'owner'];
 
 // Public: lets the signup screen preview which org/email an invite is for, before submitting.
 router.get('/:token/preview', async (req, res, next) => {
@@ -36,7 +34,7 @@ function buildInviteUrl(req, token) {
   return `${origin}/signup?invite=${token}`;
 }
 
-router.get('/', requireCompanyRole(OWNER_ROLES), async (req, res, next) => {
+router.get('/', requirePermission('invites.manage'), async (req, res, next) => {
   try {
     const invites = await Invite.find({ organization: req.organizationId, status: 'pending' })
       .sort({ createdAt: -1 })
@@ -45,7 +43,7 @@ router.get('/', requireCompanyRole(OWNER_ROLES), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/', writeLimiter, requireCompanyRole(OWNER_ROLES), validate(createSchema), async (req, res, next) => {
+router.post('/', writeLimiter, requirePermission('invites.manage'), validate(createSchema), async (req, res, next) => {
   try {
     const { email, companyRole } = req.body;
     const existingPending = await Invite.findOne({ organization: req.organizationId, email, status: 'pending' });
@@ -66,7 +64,7 @@ router.post('/', writeLimiter, requireCompanyRole(OWNER_ROLES), validate(createS
   } catch (e) { next(e); }
 });
 
-router.delete('/:id', requireCompanyRole(OWNER_ROLES), async (req, res, next) => {
+router.delete('/:id', requirePermission('invites.manage'), async (req, res, next) => {
   try {
     const invite = await Invite.findOneAndUpdate(
       { _id: req.params.id, organization: req.organizationId, status: 'pending' },
